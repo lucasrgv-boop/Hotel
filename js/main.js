@@ -72,7 +72,7 @@ const clouds = [];
 const camera = new THREE.PerspectiveCamera(28, 1, 0.5, 500);
 const cam = {
   target: new THREE.Vector3(BUILDING_W / 2, 3, 0),
-  dist: 60, yaw: 0.14, pitch: 0.16,
+  dist: 60, yaw: 0, pitch: 0.12, // vista de frente
   goal: null, goalDist: null,
 };
 function applyCamera() {
@@ -213,6 +213,7 @@ function buildWorld(level, opts) {
   Fx.startAmbient(scene, { streetZ: 1.7 + 10.8, width: BUILDING_W, palette: level.guests.palette, hats: level.guests.hats, height: level.maxFloors * FLOOR_H });
   ui.attach(game, camera, nav);
   ui.hidePanel();
+  cam.yaw = 0;
   const fr = frameAll();
   cam.target.copy(fr.target); cam.dist = fr.dist; cam.goal = null;
   applyCamera();
@@ -327,6 +328,7 @@ const menu = new MainMenu(ui, {
 
 function reframe() {
   const fr = frameAll();
+  cam.yaw = 0;
   cam.goal = fr.target;
   cam.goalDist = fr.dist;
 }
@@ -580,7 +582,7 @@ function frame(now) {
   if (mode !== 'map') Fx.update(dt * Math.max(0.5, Math.min(spd, 2)));
   // menu: câmera passeia devagar
   if (mode === 'menu') {
-    cam.yaw = 0.14 + Math.sin(now / 9000) * 0.32;
+    cam.yaw = Math.sin(now / 9000) * 0.18;
     applyCamera();
   }
   if (env) {

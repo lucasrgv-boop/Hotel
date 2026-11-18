@@ -40,7 +40,7 @@ O jogo abre num **menu principal** com um hotel de demonstração funcionando ao
 | Selecionar / alocar / limpar | clique | toque |
 | Mover câmera | arrastar, WASD / setas | arrastar |
 | Zoom | roda do mouse | pinça |
-| Girar | Q / E | — |
+| Girar a câmera (volta de frente com F) | Q / E | — |
 | Ver o prédio inteiro | F | — |
 | Pausar / velocidade | Espaço, 1, 2, 3 | botões no topo |
 | Fechar janela | Esc | ✕ |
