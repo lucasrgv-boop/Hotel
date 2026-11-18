@@ -12,7 +12,7 @@ O jogo abre num **menu principal** com um hotel de demonstração funcionando ao
 - Atender rápido em sequência gera **combo** com bônus.
 - **Eventos**: inspetor disfarçado, celebridade com fãs, quarto quebrado, queda de energia, onda de calor e o festival de cada país.
 - **Melhorias**: andares, camareiras, técnico de manutenção, concierge (atende pedidos), recepcionista, gerador, decoração, marketing e kit de limpeza.
-- No fim da temporada, cada uma das **3 metas** cumpridas vale uma **estrela**. 1 estrela libera o próximo país.
+- Depois do 12º mês vem o **encerramento**: o hotel para de receber gente nova, e a temporada só fecha quando o **último hóspede** sair. Aí, cada uma das **3 metas** cumpridas vale uma **estrela**. 1 estrela libera o próximo país.
 - As estrelas viram pontos para **bônus permanentes da rede** (capital inicial, fama, paciência, limpeza, gorjetas, obras mais baratas).
 - **Desafio do dia**: um hotel sorteado por data, 4 meses, mesmos hóspedes e eventos para todos, sem bônus. Na página publicada há um placar compartilhado.
 

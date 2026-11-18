@@ -156,14 +156,16 @@ export class UI {
     const full = Math.round(st.rating * 2) / 2;
     let stars = '';
     for (let i = 1; i <= 5; i++) stars += i <= full ? '★' : (i - 0.5 === full ? '<span style="opacity:.6">★</span>' : '<span class="off">★</span>');
-    const key = `${st.money}|${g.day}${hh}${mm}|${full}|${st.stats.guests}`;
+    const left = g.closing ? g.closingGuestsLeft() : -1;
+    const key = `${st.money}|${g.day}${hh}${mm}|${full}|${st.stats.guests}|${left}`;
     if (key !== this.lastHud) {
       this.lastHud = key;
       $('money').textContent = st.money.toLocaleString('pt-BR');
       $('money').style.color = st.money < 0 ? '#e0434f' : '';
-      $('clock').textContent = `${g.monthName} · ${hh}:${mm}`;
-      $('month').textContent = `Mês ${Math.min(g.day, g.seasonMonths)}/${g.seasonMonths}`;
-      $('month-bar').style.width = `${Math.min(100, ((st.time - 7) / (g.seasonMonths * 24 - 7)) * 100)}%`;
+      $('clock').textContent = g.closing ? `Encerrando · ${hh}:${mm}` : `${g.monthName} · ${hh}:${mm}`;
+      $('month').textContent = g.closing ? `${left} hóspede${left === 1 ? '' : 's'} ainda no hotel` : `Mês ${Math.min(g.day, g.seasonMonths)}/${g.seasonMonths}`;
+      $('month-bar').style.width = g.closing ? '100%' : `${Math.min(100, ((st.time - 7) / (g.seasonMonths * 24 - 7)) * 100)}%`;
+      $('month-bar').parentElement.classList.toggle('closing', g.closing);
       $('stars').innerHTML = stars;
       $('stars').parentElement.title = `Avaliação: ${st.rating.toFixed(2)} / 5`;
       $('guests').textContent = st.stats.guests;
@@ -252,7 +254,7 @@ export class UI {
     const s = g.state.stats;
     const fest = g.festivalActive();
     const ev = g.state.event?.active ? g.state.event.type : '';
-    const key = goals.map((x) => `${x.done}${x.text}`).join('|') + `|${g.score()}|${s.combo}|${fest?.name}|${ev}|${g.blackout}`;
+    const key = goals.map((x) => `${x.done}${x.text}`).join('|') + `|${g.score()}|${s.combo}|${fest?.name}|${ev}|${g.blackout}|${g.closing}`;
     if (key === this.lastGoals) return;
     this.lastGoals = key;
     const chips = [];
@@ -260,6 +262,7 @@ export class UI {
     if (g.blackout) chips.push(`<span class="gchip bad"><img src="${this.icons.bolt}" alt="">Sem energia</span>`);
     if (g.heatwave) chips.push(`<span class="gchip warn"><img src="${this.icons.sun}" alt="">Onda de calor</span>`);
     if (s.combo >= 2) chips.push(`<span class="gchip combo">Combo x${s.combo}</span>`);
+    if (g.closing) chips.unshift(`<span class="gchip closing"><img src="${this.icons.bell}" alt="">Encerrando: sem novos hóspedes</span>`);
     $('goals').innerHTML = `
       <div class="g-head"><b>${g.daily ? 'Desafio do dia' : g.level.name}</b><span class="g-score" title="Pontuação">${g.score().toLocaleString('pt-BR')} pts</span></div>
       ${goals.map((x) => `<div class="g-row ${x.done ? 'done' : ''}"><span class="g-star">${x.done ? '★' : '☆'}</span><span class="g-label">${x.label}</span><span class="g-val">${x.text}</span></div>`).join('')}

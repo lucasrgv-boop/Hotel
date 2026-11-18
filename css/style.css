@@ -470,3 +470,8 @@ body.on-map #game { visibility: hidden; }
   .set-row > span { grid-column: 1 / 3; }
   .seg { grid-column: 1 / 3; }
 }
+
+/* fase de encerramento da temporada */
+.mbar.closing i { background: var(--accent); animation: closingPulse 1s ease-in-out infinite alternate; }
+@keyframes closingPulse { to { opacity: 0.45; } }
+.gchip.closing { background: #ffe4d6; color: #a8441c; }

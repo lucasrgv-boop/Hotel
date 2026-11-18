@@ -195,6 +195,7 @@ export class Game {
   }
 
   festivalActive() {
+    if (this.state.closing) return null;
     const fest = this.level.festival;
     return fest && fest.months.includes(this.monthIndex + 1) ? fest : null;
   }
@@ -938,6 +939,7 @@ export class Game {
   updateEvents() {
     const e = this.state.event;
     if (!e) return;
+    if (this.closing && !e.active) { this.state.event = null; return; }
     if (!e.active && this.state.time >= e.at) this.triggerEvent();
     else if (e.active && e.until !== undefined && this.state.time >= e.until && !['inspector', 'celebrity', 'broken'].includes(e.type)) {
       if (e.type === 'blackout' && !this.state.upgrades.generator) this.hooks.toast('A energia voltou!', 'good');
@@ -959,7 +961,7 @@ export class Game {
     if (Math.floor(st.time) !== prevHour) this.everyHour();
     this.updateEvents();
 
-    this.spawnAcc += this.arrivalRatePerHour() * dh;
+    if (!this.closing) this.spawnAcc += this.arrivalRatePerHour() * dh;
     if (this.spawnAcc >= 1) {
       this.spawnAcc -= 1;
       if (this.queue.length < QUEUE_MAX) {
@@ -1049,6 +1051,7 @@ export class Game {
       for (const g of gone) this.disposeGuest(g);
       this.guests = this.guests.filter((g) => g.state !== 'gone');
     }
+    if (this.closing && (!this.guests.length || st.time - st.closing.since > 48)) { this.endSeason(); return; }
     for (const f of this.fans) animatePerson(f, dt, false, 2);
 
     if (this.manualJob) {
@@ -1116,7 +1119,7 @@ export class Game {
   }
 
   newDay(prevDay) {
-    if (this.demo) { this.state.stats.dayIncome = 0; return; }
+    if (this.demo || this.state.closing) { this.state.stats.dayIncome = 0; return; }
     const sal = this.salaries();
     const s = this.state.stats;
     const income = s.dayIncome;
@@ -1127,7 +1130,7 @@ export class Game {
     }
     s.best = Math.max(s.best, income);
     if (this.state.tutorial && prevDay >= 2) this.state.tutorial = false;
-    if (prevDay >= this.seasonMonths) { this.endSeason(); return; }
+    if (prevDay >= this.seasonMonths) { this.startClosing(); return; }
     this.sfx('day');
     this.hooks.toast(`Fim de ${MONTHS[(prevDay - 1) % 12]}: ganhou $${income}${sal ? `, salários −$${sal}` : ''}.`, 'good');
     // festival: aviso no mês anterior e no início
@@ -1141,6 +1144,19 @@ export class Game {
     this.save();
     this.hooks.changed();
   }
+
+  // encerramento: o hotel não recebe mais ninguém; a temporada acaba quando o último hóspede sair
+  get closing() { return !!this.state.closing; }
+  startClosing() {
+    this.state.closing = { since: this.state.time };
+    this.state.event = null;
+    this.spawnAcc = 0;
+    this.sfx('day');
+    if (!this.guests.length) { this.endSeason(); return; }
+    this.hooks.event?.({ icon: 'bell', title: 'Fim da temporada!', text: 'O hotel não recebe mais hóspedes novos. Atenda quem ainda está aqui: a temporada fecha quando o último sair.', kind: 'info' });
+    this.hooks.changed();
+  }
+  closingGuestsLeft() { return this.guests.filter((g) => g.state !== 'gone').length; }
 
   endSeason() {
     this.ended = true;
