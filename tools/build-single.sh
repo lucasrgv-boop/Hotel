@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gera dist/pixel-hotel.html: um único arquivo HTML com CSS, JS e Three.js embutidos.
+# Gera dist/hotel-paraiso.html: um único arquivo HTML com CSS, JS e Three.js embutidos.
 # Uso: bash tools/build-single.sh   (requer Node/npx)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -13,7 +13,7 @@ js = open('dist/.bundle.js', encoding='utf-8').read().replace('</script', '<\\/s
 html = html.replace('<link rel="stylesheet" href="css/style.css">', '<style>\n' + css + '</style>')
 html = re.sub(r'\s*<script type="importmap">.*?</script>', '', html, flags=re.S)
 html = html.replace('<script type="module" src="js/main.js"></script>', '<script>\n' + js + '\n</script>')
-open('dist/pixel-hotel.html', 'w', encoding='utf-8').write(html)
+open('dist/hotel-paraiso.html', 'w', encoding='utf-8').write(html)
 PY
 rm -f dist/.bundle.js
-ls -la dist/pixel-hotel.html
+ls -la dist/hotel-paraiso.html

@@ -1,6 +1,6 @@
-# Pixel Hotel
+# Hotel Paraíso
 
-Jogo simples de administrar um hotel, em **3D pixel art**, rodando direto no navegador (Three.js, sem build).
+Jogo simples de administrar um hotel, em **3D estilo cartoon visto de cima** (casa de bonecas com paredes cortadas), rodando direto no navegador (Three.js, sem build).
 
 ## Como jogar
 
@@ -12,6 +12,7 @@ Jogo simples de administrar um hotel, em **3D pixel art**, rodando direto no nav
   - **Construa** em espaços vazios: quartos, lanchonete, academia, piscina.
   - **Reforme** quartos para Luxo e Suíte (diárias maiores, hóspedes VIP).
   - **Melhorias**: novos andares, camareiras (limpeza automática), recepcionista (alocação automática), decoração, marketing e kit de limpeza.
+- Cada andar é visto separadamente: troque pelos botões à esquerda (ou R / F). As bolinhas mostram quartos livres (verde) e sujos (vermelho).
 - A **avaliação** (estrelas) sobe com hóspedes satisfeitos e cai com quem desiste da fila. Mais estrelas = mais hóspedes e clientes mais exigentes.
 - Ciclo de dia e noite; salários são pagos à meia-noite. O jogo salva automaticamente no navegador.
 
@@ -23,6 +24,7 @@ Jogo simples de administrar um hotel, em **3D pixel art**, rodando direto no nav
 | Mover câmera | arrastar, WASD / setas | arrastar |
 | Zoom | roda do mouse | pinça |
 | Girar | Q / E | — |
+| Trocar de andar | R / F, PageUp / PageDown | botões à esquerda |
 | Pausar / velocidade | Espaço, 1, 2, 3 | botões no topo |
 | Melhorias | U | botão MELHORIAS |
 
@@ -40,18 +42,18 @@ Também funciona publicado no GitHub Pages (é tudo estático).
 ## Estrutura
 
 - `index.html`, `css/style.css` — página e HUD.
-- `js/main.js` — renderizador pixelado (renderiza em baixa resolução e amplia sem suavização), câmera, dia/noite, entrada.
+- `js/main.js` — renderizador (sombras suaves, tone mapping), câmera de cima, dia/noite, entrada.
 - `js/game.js` — regras: hóspedes, fila, limpeza, camareiras, economia, salvamento.
-- `js/building.js` — modelos 3D do hotel (quartos, lanchonete, academia, piscina, elevador, rua).
-- `js/characters.js` — personagens em voxel e balões.
-- `js/textures.js` — texturas e ícones pixel art gerados por código.
+- `js/building.js` — modelos 3D do hotel: planta de cada andar, quartos, lanchonete, academia, piscina, elevador, jardim e rua.
+- `js/characters.js` — personagens cartoon e balões de ícone.
+- `js/textures.js` — texturas e ícones vetoriais gerados por código.
 - `js/audio.js` — efeitos sonoros 8-bit via WebAudio.
 - `js/config.js` — preços, custos e balanceamento.
-- `vendor/three.module.min.js` — Three.js r170 (licença MIT).
+- `vendor/` — Three.js r170 e RoundedBoxGeometry (licença MIT).
 
 ## Versão em arquivo único
 
-`dist/pixel-hotel.html` traz o jogo inteiro (CSS, JS e Three.js) num só arquivo HTML: basta abrir com duplo clique no navegador, sem precisar de servidor. Para gerá-lo de novo depois de mudar o código:
+`dist/hotel-paraiso.html` traz o jogo inteiro (CSS, JS e Three.js) num só arquivo HTML: basta abrir com duplo clique no navegador, sem precisar de servidor. Para gerá-lo de novo depois de mudar o código:
 
 ```bash
 bash tools/build-single.sh

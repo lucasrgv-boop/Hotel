@@ -16,7 +16,10 @@ export class UI {
     this.dirty = true;
     this.lastHud = '';
     this.icons = {};
-    for (const n of ['bed', 'burger', 'dumbbell', 'wave', 'broom', 'star', 'heart', 'coin']) this.icons[n] = iconDataURL(n, 4);
+    for (const n of ['bed', 'burger', 'dumbbell', 'wave', 'broom', 'star', 'heart', 'coin', 'building', 'bell', 'plant', 'megaphone', 'sparkle', 'dirty']) this.icons[n] = iconDataURL(n, 96);
+    this.floorsDirty = true;
+    document.querySelectorAll('img[data-icon]').forEach((img) => { img.src = this.icons[img.dataset.icon]; });
+    this.lastFloorsKey = '';
 
     $('modal-close').onclick = () => this.closeModal();
     $('modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal') this.closeModal(); });
@@ -29,9 +32,10 @@ export class UI {
     });
   }
 
-  attach(game, camera) {
+  attach(game, camera, nav) {
     this.game = game;
     this.camera = camera;
+    this.nav = nav;
     this.setSpeed(game.speed);
   }
 
@@ -52,7 +56,7 @@ export class UI {
     el.style.setProperty('--life', `${life}s`);
     $('toasts').prepend(el);
     const all = $('toasts').children;
-    while (all.length > 5) all[all.length - 1].remove();
+    while (all.length > 3) all[all.length - 1].remove();
     setTimeout(() => el.remove(), (life + 0.5) * 1000);
   }
 
@@ -96,9 +100,36 @@ export class UI {
       $('guests').textContent = st.stats.guests;
     }
     if (this.dirty) { this.dirty = false; this.renderPanel(); }
+    this.renderFloors();
   }
 
   changed() { this.dirty = true; }
+
+  // ---------- Abas de andares ----------
+  renderFloors() {
+    const g = this.game;
+    const vf = g.view.viewFloor;
+    const parts = [];
+    for (let f = g.state.floors - 1; f >= 0; f--) {
+      const s = g.floorStatus(f);
+      parts.push(`${f}:${s.free}:${s.dirty}:${s.busy}`);
+    }
+    const key = `${vf}|${parts.join(',')}`;
+    if (key === this.lastFloorsKey) return;
+    this.lastFloorsKey = key;
+    const el = $('floors');
+    el.innerHTML = '';
+    for (let f = g.state.floors - 1; f >= 0; f--) {
+      const s = g.floorStatus(f);
+      const b = document.createElement('button');
+      b.className = 'floor-btn' + (f === vf ? ' on' : '');
+      b.title = f === 0 ? 'Térreo' : `${f}º andar`;
+      b.innerHTML = `<span class="fl">${f === 0 ? 'T' : f + 'º'}</span>
+        <span class="badges">${s.free ? `<i class="b-free" title="Quartos livres">${s.free}</i>` : ''}${s.dirty ? `<i class="b-dirty" title="Quartos sujos">${s.dirty}</i>` : ''}</span>`;
+      b.onclick = () => { Sfx.click(); this.nav.setViewFloor(f); };
+      el.appendChild(b);
+    }
+  }
 
   // ---------- Painel ----------
   showSlot(f, i) { this.panelTarget = { kind: 'slot', f, i }; this.renderPanel(); }
@@ -215,8 +246,7 @@ export class UI {
         const lvl = g.state.upgrades[k];
         const maxed = lvl >= u.max;
         const cost = u.cost(lvl);
-        const icon = { floor: 'bed', maid: 'broom', reception: 'star', decor: 'heart', marketing: 'coin', cleanfast: 'broom' }[k];
-        return `<div class="card"><img src="${this.icons[icon]}" alt="">
+        return `<div class="card"><img src="${this.icons[u.icon]}" alt="">
           <div class="body"><span class="name">${u.name}</span><span class="desc">${u.desc}</span>
           <span class="lvl">${u.max > 1 ? `Nível ${lvl}/${u.max}` : (lvl ? 'Adquirido' : '')}</span>
           ${maxed ? '<span class="muted">MÁXIMO</span>' : `<button class="btn good" data-up="${k}" ${g.state.money < cost ? 'disabled' : ''}>COMPRAR $${cost}</button>`}</div></div>`;

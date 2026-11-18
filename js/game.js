@@ -1,36 +1,36 @@
 // Lógica do jogo: estado, hóspedes, camareiras, economia e progressão.
 import * as THREE from 'three';
 import {
-  FLOOR_H, SLOT_W, CORRIDOR_Z, ELEV_X, SLOTS_PER_FLOOR, MAX_FLOORS, STREET_X, BUILDING_W,
+  FLOOR_H, SLOT_W, ROOM_D, CORR_HALF, CORE_W, COLS, CORRIDOR_Z, ELEV_X, ELEV_Z, SLOTS_PER_FLOOR,
+  MAX_FLOORS, BUILDING_W, FRONT_Z, DOOR_X, STREET_Z, LOBBY_SLOTS,
   REAL_SEC_PER_HOUR, HOURS_PER_NIGHT, TIERS, BUILDABLES, UPGRADES, GUEST_TYPES,
-  START_MONEY, QUEUE_MAX, BASE_PATIENCE, CLEAN_TIME, slotX0, slotCenterX,
+  START_MONEY, QUEUE_MAX, BASE_PATIENCE, CLEAN_TIME,
 } from './config.js';
 import { createPerson, animatePerson, Bubble } from './characters.js';
 import { Sfx } from './audio.js';
 
-const SAVE_KEY = 'hotel-pixel-save-v1';
-const ELEV_Z = -1.6;
-const STREET_Z = 3.2;
-const ENTRANCE_X = 1.6;
-const QUEUE_POS = [
-  [4.5, -1.7], [4.5, -0.9], [3.6, -0.35], [2.7, -0.35], [1.8, -0.35], [0.9, -0.35], [0.9, -1.2],
-];
-const MAID_IDLE = [[7.4, -1.2], [8.2, -1.2], [7.4, -2.0], [8.2, -2.0], [7.8, -0.5]];
+const SAVE_KEY = 'hotel-save-v2';
+const QUEUE_POS = [[10.85, 3.4], [9.95, 3.4], [9.05, 3.4], [8.15, 3.4], [7.25, 3.4], [6.35, 3.4], [5.45, 3.4]];
+const MAID_IDLE = [[1.3, 2.4], [2.2, 2.4], [1.3, 3.3], [2.2, 3.3], [3.1, 3.0]];
+const LOBBY_IN_Z = FRONT_Z - 1.1;
+const SPAWN_L = -14, SPAWN_R = BUILDING_W + 14;
 
 function rand(a, b) { return a + Math.random() * (b - a); }
 function randi(a, b) { return Math.floor(rand(a, b + 1)); }
+const tierCss = (t) => '#' + TIERS[t].color.toString(16).padStart(6, '0');
 
+function emptyFloor() { return Array.from({ length: SLOTS_PER_FLOOR }, () => ({ type: 'empty' })); }
 function newState() {
-  const slots = [];
-  slots.push(Array.from({ length: SLOTS_PER_FLOOR }, (_, i) => (i < 2 ? { type: 'lobby' } : { type: 'empty' })));
-  slots[0][2] = { type: 'room', tier: 0, status: 'clean' };
-  slots[0][3] = { type: 'room', tier: 0, status: 'clean' };
+  const ground = emptyFloor();
+  for (const i of LOBBY_SLOTS) ground[i] = { type: 'lobby' };
+  ground[0] = { type: 'room', tier: 0, status: 'clean' };
+  ground[1] = { type: 'room', tier: 0, status: 'clean' };
   return {
     money: START_MONEY,
-    time: 7, // horas desde o início (começa às 07:00 do dia 1)
+    time: 7,
     rating: 3,
     floors: 1,
-    slots,
+    slots: [ground],
     upgrades: { floor: 0, maid: 0, reception: 0, decor: 0, marketing: 0, cleanfast: 0 },
     stats: { guests: 0, earned: 0, angry: 0, best: 0 },
     tutorial: true,
@@ -41,14 +41,14 @@ export class Game {
   constructor(scene, view, hooks) {
     this.scene = scene;
     this.view = view;
-    this.hooks = hooks; // { popup(worldPos, text, color), toast(msg, kind), changed() }
+    this.hooks = hooks; // { popup, toast, changed, floorsChanged }
     this.guests = [];
     this.queue = [];
     this.maids = [];
     this.selected = null;
     this.speed = 1;
-    this.spawnAcc = 0;
-    this.manualCleaning = null; // {f,i}
+    this.spawnAcc = 0.6;
+    this.manualCleaning = null;
     this.autoAcc = 0;
     this.idSeq = 1;
     this.dayIncome = 0;
@@ -59,11 +59,10 @@ export class Game {
   load() {
     let s = null;
     try { s = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { s = null; }
-    this.state = s && s.slots ? s : newState();
-    // quartos ocupados viram sujos (os hóspedes não são salvos)
+    this.state = s && s.slots && s.slots[0]?.length === SLOTS_PER_FLOOR ? s : newState();
     for (const row of this.state.slots) for (const sl of row) {
       if (sl.type === 'room' && sl.status !== 'clean') sl.status = 'dirty';
-      delete sl.guest; delete sl.claimed; delete sl.cleanP;
+      delete sl.guest; delete sl.claimed; delete sl.cleanP; delete sl.cleaner;
     }
     this.state.upgrades = { ...newState().upgrades, ...this.state.upgrades };
     this.rebuildAll();
@@ -71,8 +70,8 @@ export class Game {
 
   save() {
     try {
-      const copy = JSON.parse(JSON.stringify(this.state, (k, v) => (k === 'guest' || k === 'claimed' ? undefined : v)));
-      localStorage.setItem(SAVE_KEY, JSON.stringify(copy));
+      const json = JSON.stringify(this.state, (k, v) => (k === 'guest' || k === 'claimed' ? undefined : v));
+      localStorage.setItem(SAVE_KEY, json);
     } catch { /* ignore */ }
   }
 
@@ -85,6 +84,8 @@ export class Game {
     this.view.removeSlotsAbove(0);
     this.state = newState();
     this.rebuildAll();
+    this.view.setViewFloor(0);
+    this.hooks.floorsChanged?.();
   }
 
   rebuildAll() {
@@ -100,11 +101,11 @@ export class Game {
   syncSlot(f, i) {
     const sl = this.state.slots[f][i];
     if (sl.type === 'lobby') return;
-    const g = this.view.syncSlot(f, i, sl, true);
+    const g = this.view.syncSlot(f, i, sl);
     this.view.setDirty(f, i, sl.type === 'room' && (sl.status === 'dirty' || sl.status === 'cleaning'));
     if (!g.userData.bubble) {
-      const b = new Bubble();
-      b.sprite.position.set(SLOT_W / 2, 1.9, 0.6);
+      const b = new Bubble(1.5);
+      b.sprite.position.set(SLOT_W / 2, 2.5, -ROOM_D / 2);
       b.sprite.visible = false;
       g.add(b.sprite);
       g.userData.bubble = b;
@@ -115,6 +116,7 @@ export class Game {
   get hour() { return this.state.time % 24; }
   get day() { return Math.floor(this.state.time / 24) + 1; }
   slot(f, i) { return this.state.slots[f]?.[i]; }
+  roomNumber(f, i) { return (f + 1) * 100 + i + 1; }
 
   allSlots() {
     const out = [];
@@ -125,6 +127,18 @@ export class Game {
   facilities() { return this.allSlots().filter((s) => ['snack', 'gym', 'pool'].includes(s.sl.type)); }
   facilityTypes() { return new Set(this.facilities().map((s) => s.sl.type)); }
 
+  floorStatus(f) {
+    const row = this.state.slots[f] || [];
+    let free = 0, dirty = 0, busy = 0;
+    for (const sl of row) {
+      if (sl.type !== 'room') continue;
+      if (sl.status === 'clean') free++;
+      else if (sl.status === 'dirty') dirty++;
+      else busy++;
+    }
+    return { free, dirty, busy };
+  }
+
   nightFactor() {
     const h = this.hour;
     if (h >= 20 || h < 5) return 1;
@@ -134,20 +148,35 @@ export class Game {
   }
 
   // ---------------- Caminhos ----------------
-  // entidade possui: mesh, f (andar atual). Retorna lista de pontos [x, f, z] (f = andar)
-  route(ent, toF, toX, toZ) {
+  // qual espaço com porta contém (x, z)? null = área aberta (corredor, lobby, núcleo)
+  slotAt(f, x, z) {
+    if (Math.abs(z) <= CORR_HALF + 0.01 || x < CORE_W || x > BUILDING_W) return null;
+    const col = Math.floor((x - CORE_W) / SLOT_W);
+    if (col < 0 || col >= COLS) return null;
+    const i = (z < 0 ? 0 : COLS) + col;
+    const sl = this.slot(f, i);
+    if (!sl || sl.type === 'lobby') return null;
+    return i;
+  }
+
+  route(ent, toF, tx, tz) {
     const p = ent.mesh.position;
+    const f = ent.f;
     const pts = [];
-    const curF = ent.f;
-    if (Math.abs(p.z - CORRIDOR_Z) > 0.05) pts.push([p.x, curF, CORRIDOR_Z]);
-    if (curF !== toF) {
-      pts.push([ELEV_X, curF, CORRIDOR_Z]);
-      pts.push([ELEV_X, curF, ELEV_Z]);
-      pts.push([ELEV_X, toF, ELEV_Z]);
-      pts.push([ELEV_X, toF, CORRIDOR_Z]);
+    const from = this.slotAt(f, p.x, p.z);
+    if (from !== null) {
+      const d = this.view.door(f, from);
+      pts.push([d.x, f, d.zIn], [d.x, f, CORRIDOR_Z]);
+    } else if (Math.abs(p.z - CORRIDOR_Z) > 0.05) pts.push([p.x, f, CORRIDOR_Z]);
+    if (f !== toF) {
+      pts.push([ELEV_X, f, CORRIDOR_Z], [ELEV_X, f, ELEV_Z], [ELEV_X, toF, ELEV_Z], [ELEV_X, toF, CORRIDOR_Z]);
     }
-    pts.push([toX, toF, CORRIDOR_Z]);
-    pts.push([toX, toF, toZ]);
+    const to = this.slotAt(toF, tx, tz);
+    if (to !== null) {
+      const d = this.view.door(toF, to);
+      pts.push([d.x, toF, CORRIDOR_Z], [d.x, toF, d.zIn]);
+    } else pts.push([tx, toF, CORRIDOR_Z]);
+    pts.push([tx, toF, tz]);
     return pts;
   }
 
@@ -158,29 +187,32 @@ export class Game {
     ent.mesh.rotation.set(0, ent.mesh.rotation.y, 0);
   }
 
-  // move ao longo do caminho; true se chegou
   stepPath(ent, dt) {
     if (!ent.path || ent.path.length === 0) return true;
     const [tx, tf, tz] = ent.path[0];
-    const ty = tf * FLOOR_H + (ent.yOff || 0);
+    const ty = tf * FLOOR_H;
     const p = ent.mesh.position;
     const dx = tx - p.x, dy = ty - p.y, dz = tz - p.z;
     const dist = Math.hypot(dx, dy, dz);
     const vertical = Math.abs(dy) > 0.01 && Math.abs(dx) < 0.01 && Math.abs(dz) < 0.01;
-    const sp = (vertical ? 4.2 : 3.3) * (ent.speedMul || 1) * dt;
+    const sp = (vertical ? 4.5 : 3.2) * (ent.speedMul || 1) * dt;
+    ent.inElev = vertical;
     if (dist <= sp) {
       p.set(tx, ty, tz);
       ent.f = tf;
       ent.path.shift();
     } else {
       p.x += (dx / dist) * sp; p.y += (dy / dist) * sp; p.z += (dz / dist) * sp;
-      if (!vertical) ent.mesh.rotation.y = Math.atan2(dx, dz);
-      else ent.mesh.rotation.y = 0;
+      if (!vertical) {
+        const target = Math.atan2(dx, dz);
+        let d = target - ent.mesh.rotation.y;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        ent.mesh.rotation.y += d * Math.min(1, dt * 14);
+      }
     }
-    if (ent.platform) ent.platform.visible = vertical;
     animatePerson(ent.mesh, dt, !vertical, ent.speedMul || 1);
     if (ent.path.length === 0) {
-      if (ent.platform) ent.platform.visible = false;
+      ent.inElev = false;
       const cb = ent.onArrive; ent.onArrive = null;
       if (cb) cb();
       return true;
@@ -190,12 +222,9 @@ export class Game {
 
   makeEntityMesh(opts) {
     const mesh = createPerson(opts);
-    const platform = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 1.4), new THREE.MeshLambertMaterial({ color: 0xc0c0cc }));
-    platform.position.y = -0.05;
-    platform.visible = false;
-    mesh.add(platform);
+    mesh.rotation.order = 'YXZ';
     this.scene.add(mesh);
-    return { mesh, platform };
+    return { mesh };
   }
 
   // ---------------- Hóspedes ----------------
@@ -210,26 +239,29 @@ export class Game {
 
   spawnGuest() {
     const t = this.pickGuestType();
-    const fromLeft = Math.random() < 0.6;
-    const { mesh, platform } = this.makeEntityMesh({
+    const fromLeft = Math.random() < 0.55;
+    const hatOpts = t.id === 'vip' ? { hat: true, hatColor: 0x2a2a30 }
+      : t.id === 'tourist' && Math.random() < 0.6 ? { hat: true, hatColor: 0xf3e2a0 }
+        : t.id === 'backpacker' && Math.random() < 0.5 ? { hat: 'cap', hatColor: [0xd9473b, 0x4f9bd9, 0x6cbf4a][randi(0, 2)] } : {};
+    const { mesh } = this.makeEntityMesh({
       shirt: t.shirt,
-      suitcase: [0x8b1e3f, 0x3d5a80, 0x6b4423, 0x2a2a2a][randi(0, 3)],
-      hat: t.id === 'vip' ? 0xd4af37 : (t.id === 'tourist' && Math.random() < 0.5 ? 0xf6e7a0 : undefined),
+      suitcase: [0xd9473b, 0x4f9bd9, 0x8a5530, 0x3a3340, 0xa267d6][randi(0, 4)],
+      ...hatOpts,
     });
-    mesh.position.set(fromLeft ? STREET_X - 4 : BUILDING_W + 8, 0, STREET_Z);
-    const bubble = new Bubble();
-    bubble.sprite.position.y = 2.25;
+    mesh.position.set(fromLeft ? SPAWN_L : SPAWN_R, 0, STREET_Z + rand(-0.3, 0.3));
+    const bubble = new Bubble(1.3);
+    bubble.sprite.position.y = 2.45;
     mesh.add(bubble.sprite);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 8), new THREE.MeshBasicMaterial({ color: 0xffe680, side: THREE.DoubleSide, depthTest: false }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 24), new THREE.MeshBasicMaterial({ color: 0xffd34d, side: THREE.DoubleSide, depthTest: false, transparent: true }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.04; ring.visible = false; ring.renderOrder = 9;
     mesh.add(ring);
-    const hit = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.9, 0.9), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }));
-    hit.position.y = 0.95;
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.6, 0.9), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }));
+    hit.position.y = 1.3;
     mesh.add(hit);
     const patienceMul = 1 + this.state.upgrades.decor * 0.3;
     const g = {
       id: this.idSeq++, type: t, want: t.want, nights: randi(t.nights[0], t.nights[1]),
-      mesh, platform, bubble, ring, hit, f: 0,
+      mesh, bubble, ring, hit, f: 0,
       patience: BASE_PATIENCE * patienceMul * rand(0.85, 1.2), maxPatience: 0,
       state: 'arriving', visits: 0, sat: 60, waitFrac: 1, stayLeft: 0, room: null,
       speedMul: rand(0.9, 1.15), moodTimer: 0, mood: null,
@@ -238,7 +270,7 @@ export class Game {
     hit.userData = { kind: 'guest', guest: g };
     this.guests.push(g);
     this.queue.push(g);
-    this.setPath(g, [[ENTRANCE_X, 0, STREET_Z], [ENTRANCE_X, 0, CORRIDOR_Z]], () => this.updateQueueTargets());
+    this.setPath(g, [[DOOR_X + rand(-0.4, 0.4), 0, STREET_Z], [DOOR_X, 0, FRONT_Z + 0.6], [DOOR_X, 0, LOBBY_IN_Z]], () => this.updateQueueTargets());
     if (this.state.tutorial && this.state.stats.guests === 0 && this.guests.length === 1) {
       this.hooks.toast('Um hóspede chegou! Clique nele e depois num quarto livre.', 'info');
     }
@@ -248,14 +280,13 @@ export class Game {
     this.queue.forEach((g, idx) => {
       const [x, z] = QUEUE_POS[Math.min(idx, QUEUE_POS.length - 1)];
       g.queueIdx = idx;
-      // só reposiciona quem já entrou no lobby
       const p = g.mesh.position;
-      const inside = p.z < CORRIDOR_Z + 0.1 && p.x > -0.5 && p.x < SLOT_W * 2;
+      const inside = p.z < FRONT_Z && p.z > CORR_HALF && p.x > CORE_W && p.x < CORE_W + 2 * SLOT_W;
       if (!inside) return;
       if (g.state === 'arriving' && g.path && g.path.length) return;
       g.state = 'queue';
       if (Math.hypot(p.x - x, p.z - z) > 0.05) {
-        this.setPath(g, [[x, 0, z]], () => { g.mesh.rotation.y = Math.PI; });
+        this.setPath(g, [[x, 0, z]], () => { g.mesh.rotation.y = Math.PI / 2; });
       }
     });
   }
@@ -271,16 +302,17 @@ export class Game {
     return (0.12 + 0.16 * rooms) * tod * ratingF * mk * fac;
   }
 
-  // melhor quarto livre para um hóspede
   bestRoomFor(g) {
     const free = this.rooms().filter((r) => r.sl.status === 'clean');
     if (!free.length) return null;
-    free.sort((a, b) => {
-      const da = a.sl.tier === g.want ? 0 : a.sl.tier > g.want ? 1 + (a.sl.tier - g.want) : 10;
-      const db = b.sl.tier === g.want ? 0 : b.sl.tier > g.want ? 1 + (b.sl.tier - g.want) : 10;
-      return da - db || a.f - b.f;
-    });
+    const score = (r) => (r.sl.tier === g.want ? 0 : r.sl.tier > g.want ? 1 + (r.sl.tier - g.want) : 10);
+    free.sort((a, b) => score(a) - score(b) || a.f - b.f);
     return free[0];
+  }
+
+  bedStand(f, i) {
+    const bed = this.view.slotGroup(f, i).userData.bedSpot;
+    return this.view.toWorld(f, i, new THREE.Vector3(bed.x, 0, bed.z + 1.05));
   }
 
   assign(g, f, i) {
@@ -299,9 +331,8 @@ export class Game {
     this.queue = this.queue.filter((q) => q !== g);
     if (this.selected === g) this.select(null);
     g.bubble.sprite.visible = false;
-    const grp = this.view.slotGroup(f, i);
-    const bed = grp.userData.bedSpot;
-    this.setPath(g, this.route(g, f, slotX0(i) + bed.x, bed.z + 0.6), () => this.enterBed(g));
+    const stand = this.bedStand(f, i);
+    this.setPath(g, this.route(g, f, stand.x, stand.z), () => this.enterBed(g));
     this.updateQueueTargets();
     Sfx.select();
     if (this.state.tutorial && this.state.stats.guests === 0) {
@@ -313,10 +344,9 @@ export class Game {
 
   enterBed(g) {
     const { f, i } = g.room;
-    const grp = this.view.slotGroup(f, i);
-    const bed = grp.userData.bedSpot;
-    g.mesh.position.set(slotX0(i) + bed.x, f * FLOOR_H + bed.y, bed.z);
-    g.mesh.rotation.set(-Math.PI / 2, 0, 0);
+    const bed = this.view.slotGroup(f, i).userData.bedSpot;
+    g.mesh.position.copy(this.view.toWorld(f, i, bed));
+    g.mesh.rotation.set(-Math.PI / 2, this.view.slotRotY(i), 0);
     g.lying = true;
     g.state = 'inRoom';
     if (g.stayLeft <= 0) g.stayLeft = g.nights * HOURS_PER_NIGHT;
@@ -324,24 +354,20 @@ export class Game {
     if (g.mesh.userData.suitcase) g.mesh.userData.suitcase.visible = false;
   }
 
-  leaveRoomTo(g, toF, toX, toZ, then) {
-    g.mesh.rotation.set(0, 0, 0);
+  getUp(g) {
+    const { f, i } = g.room;
+    const stand = this.bedStand(f, i);
+    g.mesh.rotation.set(0, this.view.slotRotY(i) + Math.PI, 0);
+    g.mesh.position.copy(stand);
     g.lying = false;
-    // sai da cama para o chão
-    const p = g.mesh.position;
-    p.y = g.f * FLOOR_H;
-    p.z += 0.6;
-    this.setPath(g, this.route(g, toF, toX, toZ), then);
   }
 
   tryVisitFacility(g) {
     const facs = this.facilities();
     if (!facs.length || g.visits >= 2) return;
-    // escolhe uma instalação com vaga
     const options = [];
     for (const fc of facs) {
-      const grp = this.view.slotGroup(fc.f, fc.i);
-      const spots = grp.userData.spots;
+      const spots = this.view.slotGroup(fc.f, fc.i).userData.spots;
       const used = this.guests.filter((o) => o.facility && o.facility.f === fc.f && o.facility.i === fc.i).map((o) => o.facility.spot);
       for (let s = 0; s < spots.length; s++) if (!used.includes(s)) options.push({ ...fc, spot: s });
     }
@@ -350,26 +376,27 @@ export class Game {
     g.facility = { f: pick.f, i: pick.i, spot: pick.spot, type: pick.sl.type };
     g.state = 'toFacility';
     const spot = this.view.slotGroup(pick.f, pick.i).userData.spots[pick.spot];
-    this.leaveRoomTo(g, pick.f, slotX0(pick.i) + spot.x, spot.z, () => this.atFacility(g));
+    const w = this.view.toWorld(pick.f, pick.i, new THREE.Vector3(spot.x, 0, spot.z));
+    this.getUp(g);
+    this.setPath(g, this.route(g, pick.f, w.x, w.z), () => this.atFacility(g));
   }
 
   atFacility(g) {
     const fc = g.facility;
     const grp = this.view.slotGroup(fc.f, fc.i);
     if (!grp || this.slot(fc.f, fc.i).type !== fc.type) { this.returnToRoom(g); return; }
-    const spot = grp.userData.spots[fc.spot];
+    const ud = grp.userData;
+    const spot = ud.spots[fc.spot];
     g.state = 'atFacility';
     g.facTime = 1.5;
-    g.mesh.rotation.y = Math.PI;
-    if (fc.type === 'pool' && fc.spot < (grp.userData.swimSpots || 0)) {
-      g.mesh.position.y = fc.f * FLOOR_H - 0.45; g.swimming = true;
-    } else if (spot.y > 0) {
-      g.mesh.position.y = fc.f * FLOOR_H + spot.y;
-    }
-    if (fc.type === 'pool' && fc.spot === 2) { g.mesh.rotation.set(-Math.PI / 2 + 0.4, Math.PI / 2, 0); g.lying = true; }
+    const rotY = this.view.slotRotY(fc.i);
+    g.mesh.rotation.set(0, rotY + (ud.faceSpots ? ud.faceSpots[fc.spot] : Math.PI), 0);
+    g.swimming = fc.type === 'pool' && fc.spot < (ud.swimSpots || 0);
+    if (g.swimming) g.mesh.position.y = fc.f * FLOOR_H - 0.55;
+    else g.mesh.position.y = fc.f * FLOOR_H + (spot.y || 0);
     const [a, b] = BUILDABLES[fc.type].spend;
     const amount = randi(a, b);
-    this.earn(amount, g.mesh.position.clone().add(new THREE.Vector3(0, 2.4, 0)));
+    this.earn(amount, g.mesh.position.clone().add(new THREE.Vector3(0, 2.6, 0)));
     g.visits++;
     g.bubble.sprite.visible = true;
     g.bubble.set(BUILDABLES[fc.type].icon);
@@ -380,17 +407,16 @@ export class Game {
     g.swimming = false;
     g.state = 'toRoom';
     g.bubble.sprite.visible = false;
-    g.mesh.rotation.set(0, 0, 0); g.lying = false;
+    g.mesh.rotation.set(0, g.mesh.rotation.y, 0); g.lying = false;
     g.mesh.position.y = g.f * FLOOR_H;
     const { f, i } = g.room;
-    const bed = this.view.slotGroup(f, i).userData.bedSpot;
-    this.setPath(g, this.route(g, f, slotX0(i) + bed.x, bed.z + 0.6), () => this.enterBed(g));
+    const stand = this.bedStand(f, i);
+    this.setPath(g, this.route(g, f, stand.x, stand.z), () => this.enterBed(g));
   }
 
   checkout(g) {
     const { f, i } = g.room;
     const sl = this.slot(f, i);
-    // satisfação
     let sat = 58 + g.waitFrac * 25;
     const diff = sl.tier - g.want;
     if (diff < 0) sat -= 25 * -diff; else if (diff > 0) sat += 8;
@@ -400,7 +426,8 @@ export class Game {
     const payTier = Math.min(sl.tier, g.want);
     const base = TIERS[payTier].price * g.nights;
     const tip = Math.round(base * Math.max(0, (sat - 50) / 100));
-    const pos = g.mesh.position.clone().add(new THREE.Vector3(0, 1.4, 0));
+    this.getUp(g);
+    const pos = g.mesh.position.clone().add(new THREE.Vector3(0, 2.4, 0));
     this.earn(base + tip, pos, tip > 0 ? `+$${base} (+$${tip} gorjeta)` : null);
     this.state.stats.guests++;
     this.bumpRating(sat, 0.12);
@@ -411,31 +438,31 @@ export class Game {
     g.mood = sat >= 70 ? 'heart' : sat >= 45 ? 'star' : 'angry';
     g.moodTimer = 4;
     g.bubble.sprite.visible = true;
-    g.bubble.set(g.mood, 1, null, sat >= 45 ? '#1a1420' : '#e8433a');
+    g.bubble.set(g.mood, 1, null, sat >= 45 ? '#ffffff' : '#ef4b5c');
     if (g.mesh.userData.suitcase) g.mesh.userData.suitcase.visible = true;
-    this.leaveRoomTo(g, 0, ENTRANCE_X, CORRIDOR_Z, () => this.walkAway(g));
+    this.setPath(g, this.route(g, 0, DOOR_X, LOBBY_IN_Z), () => this.walkAway(g));
     if (this.state.tutorial && this.state.stats.guests === 1) {
-      this.hooks.toast('Hóspede pagou! Limpe o quarto clicando nele. Use o dinheiro em CONSTRUIR/MELHORIAS.', 'info');
+      this.hooks.toast('Hóspede pagou! Limpe o quarto clicando nele. Use o dinheiro para construir e em MELHORIAS.', 'info');
     }
     this.hooks.changed();
   }
 
   walkAway(g) {
-    const exitX = Math.random() < 0.5 ? STREET_X - 6 : BUILDING_W + 10;
-    this.setPath(g, [[ENTRANCE_X, 0, STREET_Z], [exitX, 0, STREET_Z]], () => { g.state = 'gone'; });
+    const exitX = Math.random() < 0.5 ? SPAWN_L : SPAWN_R;
+    this.setPath(g, [[DOOR_X, 0, FRONT_Z + 0.6], [DOOR_X, 0, STREET_Z], [exitX, 0, STREET_Z]], () => { g.state = 'gone'; });
   }
 
   guestGivesUp(g) {
     this.queue = this.queue.filter((q) => q !== g);
     if (this.selected === g) this.select(null);
     g.state = 'leaving';
-    g.bubble.set('angry', 1, null, '#e8433a');
+    g.bubble.set('angry', 1, null, '#ef4b5c');
     g.mood = 'angry'; g.moodTimer = 4;
     this.state.stats.angry++;
     this.bumpRating(0, 0.05);
     Sfx.angry();
     this.hooks.toast(`${g.type.name} cansou de esperar e foi embora!`, 'bad');
-    this.setPath(g, [[g.mesh.position.x, 0, CORRIDOR_Z], [ENTRANCE_X, 0, CORRIDOR_Z]], () => this.walkAway(g));
+    this.setPath(g, [[g.mesh.position.x, 0, LOBBY_IN_Z], [DOOR_X, 0, LOBBY_IN_Z]], () => this.walkAway(g));
     this.updateQueueTargets();
     this.hooks.changed();
   }
@@ -472,13 +499,15 @@ export class Game {
     this.hooks.changed();
   }
 
+  slotCenter(f, i, y = 1.6) { return this.view.toWorld(f, i, new THREE.Vector3(SLOT_W / 2, y, -ROOM_D / 2)); }
+
   // ---------------- Limpeza ----------------
   cleanTime() { return CLEAN_TIME * (this.state.upgrades.cleanfast ? 0.6 : 1); }
 
   startManualClean(f, i) {
     const sl = this.slot(f, i);
     if (sl.status !== 'dirty') return;
-    if (sl.claimed) { this.hooks.toast('Uma camareira já está indo limpar esse quarto.', 'info'); return; }
+    if (sl.claimed !== undefined && sl.claimed !== null) { this.hooks.toast('Uma camareira já está indo limpar esse quarto.', 'info'); return; }
     if (this.manualCleaning) {
       Sfx.error();
       this.hooks.toast('Você já está limpando um quarto! Contrate camareiras em MELHORIAS.', 'warn');
@@ -499,42 +528,37 @@ export class Game {
     sl.cleaner = null;
     sl.claimed = null;
     this.view.setDirty(f, i, false);
-    this.view.setProgress(f, i, null);
     if (this.manualCleaning && this.manualCleaning.f === f && this.manualCleaning.i === i) this.manualCleaning = null;
     Sfx.clean();
-    this.hooks.popup(this.view.slotWorld(f, i, new THREE.Vector3(SLOT_W / 2, 2.2, 0.5)), 'Limpo!', '#9fe870');
+    if (f === this.view.viewFloor) this.hooks.popup(this.slotCenter(f, i, 1.8), 'Limpo!', '#9fe870');
     this.hooks.changed();
   }
 
   addMaid() {
-    const { mesh, platform } = this.makeEntityMesh({ shirt: 0x2b2b3a, pants: 0x2b2b3a, hat: 0xffffff, skin: undefined });
+    const { mesh } = this.makeEntityMesh({ shirt: 0x34507a, pants: 0x34507a, hairStyle: 1, apron: true });
     const idx = this.maids.length;
     const [x, z] = MAID_IDLE[idx % MAID_IDLE.length];
     mesh.position.set(x, 0, z);
-    mesh.rotation.y = 0;
-    // avental
-    const apron = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.05), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-    apron.position.set(0, 0.7, 0.18);
-    mesh.userData.rig.body.add(apron);
-    const bubble = new Bubble();
-    bubble.sprite.position.y = 2.25; bubble.sprite.visible = false;
+    mesh.rotation.y = Math.PI / 2;
+    const bubble = new Bubble(1.2);
+    bubble.sprite.position.y = 2.3; bubble.sprite.visible = false;
     mesh.add(bubble.sprite);
-    this.maids.push({ id: idx, mesh, platform, bubble, f: 0, state: 'idle', target: null, home: [x, z], speedMul: 1.15 });
+    this.maids.push({ id: idx, mesh, bubble, f: 0, state: 'idle', target: null, home: [x, z], speedMul: 1.15 });
   }
 
   updateMaids(dt) {
     for (const m of this.maids) {
       if (m.state === 'idle') {
         animatePerson(m.mesh, dt, false);
-        const dirty = this.rooms().filter((r) => r.sl.status === 'dirty' && !r.sl.claimed);
+        const dirty = this.rooms().filter((r) => r.sl.status === 'dirty' && (r.sl.claimed === undefined || r.sl.claimed === null));
         if (dirty.length) {
-          // mais próximo (por andar)
           dirty.sort((a, b) => Math.abs(a.f - m.f) - Math.abs(b.f - m.f));
           const t = dirty[0];
           t.sl.claimed = m.id;
           m.target = { f: t.f, i: t.i };
           m.state = 'walking';
-          this.setPath(m, this.route(m, t.f, slotCenterX(t.i), -1.4), () => {
+          const w = this.view.toWorld(t.f, t.i, new THREE.Vector3(2.4, 0, -1.6));
+          this.setPath(m, this.route(m, t.f, w.x, w.z), () => {
             const sl = this.slot(t.f, t.i);
             if (sl.type !== 'room' || sl.status !== 'dirty') { this.maidGoHome(m); return; }
             sl.status = 'cleaning'; sl.cleanP = 0; sl.cleaner = 'maid';
@@ -551,13 +575,11 @@ export class Game {
         const sl = this.slot(f, i);
         if (!sl || sl.status !== 'cleaning') { this.maidGoHome(m); continue; }
         sl.cleanP += dt / this.cleanTime();
-        this.view.setProgress(f, i, sl.cleanP);
         if (sl.cleanP >= 1) {
           this.finishClean(f, i);
           m.bubble.sprite.visible = false;
-          // tem mais algum sujo? vai direto
-          const more = this.rooms().some((r) => r.sl.status === 'dirty' && !r.sl.claimed);
-          if (more) { m.state = 'idle'; } else this.maidGoHome(m);
+          const more = this.rooms().some((r) => r.sl.status === 'dirty' && (r.sl.claimed === undefined || r.sl.claimed === null));
+          if (more) m.state = 'idle'; else this.maidGoHome(m);
         }
       }
     }
@@ -566,8 +588,8 @@ export class Game {
   maidGoHome(m) {
     m.state = 'home';
     m.bubble.sprite.visible = false;
-    m.mesh.rotation.set(0, 0, 0);
-    this.setPath(m, this.route(m, 0, m.home[0], m.home[1]), () => { m.state = 'idle'; m.mesh.rotation.y = 0; });
+    m.mesh.rotation.set(0, m.mesh.rotation.y, 0);
+    this.setPath(m, this.route(m, 0, m.home[0], m.home[1]), () => { m.state = 'idle'; m.mesh.rotation.y = Math.PI / 2; });
   }
 
   // ---------------- Construção / melhorias ----------------
@@ -582,7 +604,7 @@ export class Game {
     this.state.slots[f][i] = type === 'room' ? { type: 'room', tier: 0, status: 'clean' } : { type };
     this.syncSlot(f, i);
     Sfx.build();
-    this.hooks.popup(this.view.slotWorld(f, i, new THREE.Vector3(SLOT_W / 2, 2.2, 0.5)), `-$${cost}`, '#ff8a80');
+    this.hooks.popup(this.slotCenter(f, i, 2), `-$${cost}`, '#ff8a80');
     this.hooks.toast(`${BUILDABLES[type].name} construído(a)!`, 'good');
     this.hooks.changed();
     this.save();
@@ -599,9 +621,8 @@ export class Game {
     sl.status = 'clean'; sl.claimed = null; sl.cleanP = null;
     if (this.manualCleaning && this.manualCleaning.f === f && this.manualCleaning.i === i) this.manualCleaning = null;
     this.syncSlot(f, i);
-    this.view.setProgress(f, i, null);
     Sfx.build();
-    this.hooks.toast(`Quarto ${(f + 1) * 100 + i + 1} agora é ${next.name}!`, 'good');
+    this.hooks.toast(`Quarto ${this.roomNumber(f, i)} agora é ${next.name}!`, 'good');
     this.save();
   }
 
@@ -615,7 +636,6 @@ export class Game {
     for (const m of this.maids) if (m.target && m.target.f === f && m.target.i === i && m.state !== 'idle') this.maidGoHome(m);
     this.state.slots[f][i] = { type: 'empty' };
     this.syncSlot(f, i);
-    this.view.setProgress(f, i, null);
     this.hooks.changed();
     this.save();
   }
@@ -631,11 +651,11 @@ export class Game {
     this.state.upgrades[key]++;
     if (key === 'floor') {
       this.state.floors++;
-      this.state.slots.push(Array.from({ length: SLOTS_PER_FLOOR }, () => ({ type: 'empty' })));
+      this.state.slots.push(emptyFloor());
       this.view.setFloors(this.state.floors);
       for (let i = 0; i < SLOTS_PER_FLOOR; i++) this.syncSlot(this.state.floors - 1, i);
       this.hooks.toast(`Novo andar construído! Agora são ${this.state.floors} andares.`, 'good');
-      this.hooks.floorsChanged?.();
+      this.hooks.floorsChanged?.(this.state.floors - 1);
     } else if (key === 'maid') {
       this.addMaid();
       this.hooks.toast('Camareira contratada!', 'good');
@@ -658,17 +678,13 @@ export class Game {
   // ---------------- Atualização principal ----------------
   update(realDt) {
     const dt = realDt * this.speed;
-    if (dt <= 0) {
-      for (const g of this.guests) if (!g.lying) animatePerson(g.mesh, realDt, false);
-      return;
-    }
+    if (dt <= 0) { this.updateVisibility(); return; }
     const st = this.state;
     const prevDay = this.day;
     const dh = dt / REAL_SEC_PER_HOUR;
     st.time += dh;
     if (this.day !== prevDay) this.newDay(prevDay);
 
-    // chegada de hóspedes
     this.spawnAcc += this.arrivalRatePerHour() * dh;
     if (this.spawnAcc >= 1) {
       this.spawnAcc -= 1;
@@ -678,7 +694,6 @@ export class Game {
       }
     }
 
-    // recepcionista automática
     if (st.upgrades.reception) {
       this.autoAcc += dt;
       if (this.autoAcc > 1.2) {
@@ -691,7 +706,6 @@ export class Game {
       }
     }
 
-    // hóspedes
     for (const g of this.guests) {
       if (g.moodTimer > 0) {
         g.moodTimer -= dt;
@@ -704,7 +718,7 @@ export class Game {
           else animatePerson(g.mesh, dt, false);
           if (g.state === 'queue') g.patience -= dt;
           g.bubble.sprite.visible = true;
-          g.bubble.set('bed', Math.max(0, g.patience / g.maxPatience), '#' + TIERS[g.want].color.toString(16).padStart(6, '0'), this.selected === g ? '#f6c90e' : '#1a1420', g.nights);
+          g.bubble.set('bed', Math.max(0, g.patience / g.maxPatience), tierCss(g.want), this.selected === g ? '#ffd34d' : '#ffffff', g.nights);
           if (g.patience <= 0) this.guestGivesUp(g);
           break;
         }
@@ -727,8 +741,12 @@ export class Game {
         }
         case 'atFacility': {
           g.facTime -= dh;
-          if (g.swimming) g.mesh.position.y = g.facility.f * FLOOR_H - 0.45 + Math.sin(performance.now() / 300 + g.id) * 0.06;
-          else if (!g.lying) animatePerson(g.mesh, dt, g.facility.type === 'gym' && g.facility.spot < 2, 1.4);
+          if (g.swimming) g.mesh.position.y = g.facility.f * FLOOR_H - 0.55 + Math.sin(performance.now() / 300 + g.id) * 0.05;
+          else {
+            const grp = this.view.slotGroup(g.facility.f, g.facility.i);
+            const running = g.facility.type === 'gym' && g.facility.spot < (grp?.userData.runSpots || 0);
+            animatePerson(g.mesh, dt, running, 1.4);
+          }
           if (g.facTime <= 0) this.returnToRoom(g);
           break;
         }
@@ -738,57 +756,59 @@ export class Game {
         default: break;
       }
     }
-    // remove quem foi embora
     const gone = this.guests.filter((g) => g.state === 'gone');
     if (gone.length) {
       for (const g of gone) this.scene.remove(g.mesh);
       this.guests = this.guests.filter((g) => g.state !== 'gone');
     }
 
-    // limpeza manual
     if (this.manualCleaning) {
       const { f, i } = this.manualCleaning;
       const sl = this.slot(f, i);
       if (!sl || sl.status !== 'cleaning') this.manualCleaning = null;
       else {
         sl.cleanP += dt / this.cleanTime();
-        this.view.setProgress(f, i, sl.cleanP);
         if (sl.cleanP >= 1) this.finishClean(f, i);
       }
     }
 
     this.updateMaids(dt);
     this.updateSlotVisuals(dt);
+    this.updateVisibility();
+  }
+
+  // só aparece quem está no andar visto (e fora do poço do elevador)
+  updateVisibility() {
+    const vf = this.view.viewFloor;
+    for (const e of this.guests) e.mesh.visible = e.f === vf && !e.inElev;
+    for (const e of this.maids) e.mesh.visible = e.f === vf && !e.inElev;
   }
 
   updateSlotVisuals(dt) {
     const night = this.nightFactor();
-    this.view.setLobbyLight(night);
+    const t = performance.now();
     for (const { f, i, sl } of this.allSlots()) {
       if (sl.type === 'lobby') continue;
       const grp = this.view.slotGroup(f, i);
       if (!grp) continue;
       const b = grp.userData.bubble;
       if (sl.type === 'room') {
-        if (sl.status === 'dirty') { b.sprite.visible = true; b.set('dirty', 1, null, '#e8433a'); }
-        else if (sl.status === 'cleaning') { b.sprite.visible = true; b.set('broom', 1, null, '#6abe30'); }
+        if (sl.status === 'dirty') { b.sprite.visible = true; b.set('dirty', 1, null, '#ef4b5c'); }
+        else if (sl.status === 'cleaning') { b.sprite.visible = true; b.set('broom', Math.min(1, sl.cleanP || 0), null, '#52c45a', 0, '#52c45a'); }
         else b.sprite.visible = false;
-        this.view.setLight(f, i, sl.status !== 'clean' || night > 0.9, night);
-      } else if (sl.type !== 'empty') {
-        b.sprite.visible = false;
-        this.view.setLight(f, i, true, night);
+        this.view.setLight(f, i, sl.status === 'occupied', night);
       } else {
         b.sprite.visible = false;
-        if (grp.userData.plus) grp.userData.plus.position.y = 1.4 + Math.sin(performance.now() / 400) * 0.08;
+        if (grp.userData.plus) grp.userData.plus.position.y = 1.0 + Math.sin(t / 400 + i) * 0.08;
       }
-      if (grp.userData.water) grp.userData.water.offset.x += dt * 0.05;
-      if (grp.userData.ring) grp.userData.ring.position.y = 0.4 + Math.sin(performance.now() / 600) * 0.03;
+      if (f !== this.view.viewFloor) continue;
+      if (grp.userData.water) grp.userData.water.offset.x += dt * 0.04;
+      if (grp.userData.ring) grp.userData.ring.position.y = grp.userData.ringY + Math.sin(t / 600) * 0.03;
       for (const n of grp.userData.npcs || []) animatePerson(n, dt, false);
     }
     const rec = this.view.lobby.userData.receptionist;
     animatePerson(rec, dt, false);
-    if (this.selected) rec.rotation.y = Math.sin(performance.now() / 300) * 0.2;
-    else rec.rotation.y *= 0.9;
+    rec.rotation.y = -Math.PI / 2 + (this.selected ? Math.sin(t / 300) * 0.25 : 0);
   }
 
   newDay(prevDay) {
@@ -797,7 +817,7 @@ export class Game {
     this.dayIncome = 0;
     if (sal) {
       this.state.money -= sal;
-      this.hooks.popup(new THREE.Vector3(4.5, 3, 0), `-$${sal} salários`, '#ff8a80');
+      this.hooks.popup(new THREE.Vector3(DOOR_X, 2.5, 3), `-$${sal} salários`, '#ff8a80');
     }
     this.state.stats.best = Math.max(this.state.stats.best, income);
     Sfx.day();

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Pixel Hotel</title>
+  <title>Hotel Paraíso</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
@@ -18,10 +18,10 @@
 
   <header id="hud">
     <div class="hud-group">
-      <div class="stat money" title="Dinheiro"><span class="ico">$</span><span id="money">0</span></div>
-      <div class="stat" title="Dia e hora"><span class="ico">☼</span><span id="clock">Dia 1 07:00</span></div>
+      <div class="stat money" title="Dinheiro"><img class="ico" data-icon="coin" alt=""><span id="money">0</span></div>
+      <div class="stat" title="Dia e hora"><img class="ico" data-icon="bell" alt=""><span id="clock">Dia 1 07:00</span></div>
       <div class="stat" title="Avaliação do hotel"><span id="stars" class="stars"></span></div>
-      <div class="stat small" title="Hóspedes atendidos"><span class="ico">☺</span><span id="guests">0</span></div>
+      <div class="stat small" title="Hóspedes atendidos"><img class="ico" data-icon="heart" alt=""><span id="guests">0</span></div>
     </div>
     <div class="hud-group">
       <div class="speed" id="speed">
@@ -30,12 +30,13 @@
         <button data-speed="2" title="Velocidade 2x">▶▶</button>
         <button data-speed="4" title="Velocidade 4x">▶▶▶</button>
       </div>
-      <button id="btn-upgrades" class="btn primary">MELHORIAS</button>
+      <button id="btn-upgrades" class="btn primary">Melhorias</button>
       <button id="btn-sound" class="btn icon" title="Som">♪</button>
       <button id="btn-menu" class="btn icon" title="Menu">≡</button>
     </div>
   </header>
 
+  <nav id="floors" aria-label="Andares"></nav>
   <aside id="panel" class="hidden"></aside>
   <div id="hint"></div>
   <div id="toasts"></div>
@@ -49,7 +50,7 @@
 
   <div id="intro" class="hidden">
     <div class="modal-box intro-box">
-      <h1>PIXEL HOTEL</h1>
+      <h1>Hotel Paraíso</h1>
       <p>Você é o gerente! Hóspedes chegam na <b>recepção</b> e esperam na fila.</p>
       <ol>
         <li><b>Clique num hóspede</b> da fila e depois num <b>quarto livre</b>.</li>
@@ -57,8 +58,8 @@
         <li>Quando ele sai, você recebe e o quarto fica <b>sujo</b>: clique nele para <b>limpar</b>.</li>
         <li>Use o dinheiro para <b>construir</b> quartos, lanchonete, academia, piscina e novos andares!</li>
       </ol>
-      <p class="muted">Arraste para mover a câmera, roda do mouse / pinça para zoom, Q/E para girar.</p>
-      <button id="intro-start" class="btn primary big">ABRIR O HOTEL</button>
+      <p class="muted">Troque de andar pelos botões à esquerda (ou R / F). Arraste para mover a câmera, roda do mouse ou pinça para zoom, Q/E para girar.</p>
+      <button id="intro-start" class="btn primary big">Abrir o hotel</button>
     </div>
   </div>
 
