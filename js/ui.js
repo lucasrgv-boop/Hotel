@@ -426,8 +426,12 @@ export class UI {
       <div class="modal-actions">
         <button class="btn" id="m-help">Como jogar</button>
         <button class="btn danger" id="m-new">Recomeçar temporada</button>
+        <button class="btn" id="m-settings">Configurações</button>
+        <button class="btn" id="m-menu">Menu principal</button>
         <button class="btn primary" id="m-map">Voltar ao mapa</button>
       </div>`);
+    $('m-menu').onclick = () => { this.closeModal(); this.nav.toMenu(); };
+    $('m-settings').onclick = () => { this.closeModal(); this.nav.settings?.(); };
     $('m-help').onclick = () => { this.closeModal(); $('intro').classList.remove('hidden'); };
     $('m-map').onclick = () => { this.closeModal(); this.nav.toMap(); };
     $('m-new').onclick = () => {

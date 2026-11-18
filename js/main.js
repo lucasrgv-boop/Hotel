@@ -8,7 +8,11 @@ import { HotelView, buildEnvironment } from './building.js';
 import { setAnisotropy } from './textures.js';
 import { Game } from './game.js';
 import { UI } from './ui.js';
-import { unlockAudio, Sfx } from './audio.js';
+import { unlockAudio, Sfx, Settings } from './audio.js';
+import { Music } from './music.js';
+import { MainMenu } from './menu.js';
+import { Fx } from './fx.js';
+import { ShaderPass } from '../vendor/jsm/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from '../vendor/jsm/environments/RoomEnvironment.js';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
@@ -103,18 +107,49 @@ function frameAll() {
     dist,
   };
 }
-// pós-processamento: brilho (bloom) nas luzes e placas, com antisserrilhado (MSAA)
-const pr = Math.min(window.devicePixelRatio || 1, 2);
-const rt = new THREE.WebGLRenderTarget(window.innerWidth * pr, window.innerHeight * pr, { type: THREE.HalfFloatType, samples: 4 });
+// pós-processamento: brilho (bloom) nas luzes e placas, vinheta e cor, com antisserrilhado (MSAA)
+const rt = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { type: THREE.HalfFloatType, samples: 4 });
 const composer = new EffectComposer(renderer, rt);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), 0.3, 0.4, 1.05);
 composer.addPass(bloom);
+const grade = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, vignette: { value: 0.32 }, saturation: { value: 1.12 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float vignette; uniform float saturation; varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      c.rgb = mix(vec3(l), c.rgb, saturation);
+      vec2 d = vUv - 0.5; d.x *= 1.3;
+      c.rgb *= 1.0 - vignette * smoothstep(0.35, 0.85, length(d));
+      gl_FragColor = c;
+    }`,
+});
+composer.addPass(grade);
 composer.addPass(new OutputPass());
+
+// qualidade: Alta (sombras suaves 2048, brilho), Média (1024), Leve (sem sombras nem brilho)
+function quality() { return Settings.get('quality') || 'high'; }
+function pixelRatio() { const q = quality(); return Math.min(window.devicePixelRatio || 1, q === 'high' ? 2 : q === 'medium' ? 1.5 : 1); }
+function applyQuality() {
+  const q = quality();
+  renderer.setPixelRatio(pixelRatio());
+  const shadows = q !== 'low';
+  if (renderer.shadowMap.enabled !== shadows) {
+    renderer.shadowMap.enabled = shadows;
+    scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; }); });
+  }
+  sun.castShadow = shadows;
+  const size = q === 'high' ? 2048 : 1024;
+  if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
+  bloom.enabled = q !== 'low';
+  resize();
+}
 
 function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight, false);
-  composer.setPixelRatio(pr);
+  composer.setPixelRatio(pixelRatio());
   composer.setSize(window.innerWidth, window.innerHeight);
   bloom.resolution.set(window.innerWidth / 2, window.innerHeight / 2);
   applyCamera();
@@ -136,11 +171,15 @@ scene.add(hemi, sun, sun.target, ambient);
 let env = null;
 let view = null;
 let game = null;
-let current = null; // { levelId, daily, seed }
+let current = null; // { levelId, daily, demo }
+let mode = 'menu';  // 'menu' | 'map' | 'game'
 const ui = new UI();
+Fx.init(scene);
 
 const nav = {
   toMap: () => showMap(),
+  toMenu: () => showMenu(),
+  settings: () => menu.openSettings(),
   restart: () => { if (current?.daily) startDaily(); else startLevel(current.levelId, true); },
 };
 
@@ -148,6 +187,7 @@ function clearWorld() {
   if (game) { game.save(); game.dispose(); }
   if (env) scene.remove(env.group);
   if (view) { scene.remove(view.root); scene.remove(view.hoverBox); }
+  Fx.clear();
   game = null; view = null; env = null;
 }
 
@@ -156,7 +196,11 @@ function buildWorld(level, opts) {
   setCols(level.cols);
   env = buildEnvironment(scene, level);
   view = new HotelView(scene, level);
-  game = new Game(scene, view, {
+  const demo = !!opts.demo;
+  game = new Game(scene, view, demo ? {
+    popup: () => {}, toast: () => {}, changed: () => {}, floorsChanged: () => {}, event: () => {},
+    seasonEnd: () => {}, seenTutorial: () => true, fx: (kind, pos) => fxHook(kind, pos),
+  } : {
     popup: (p, t, c) => ui.popup(p, t, c),
     toast: (m, k) => ui.toast(m, k),
     changed: () => ui.changed(),
@@ -164,7 +208,9 @@ function buildWorld(level, opts) {
     event: (e) => ui.event(e),
     seasonEnd: (res) => onSeasonEnd(res),
     seenTutorial: () => Meta.get().seenTutorial,
+    fx: (kind, pos) => fxHook(kind, pos),
   }, level, opts);
+  Fx.startAmbient(scene, { streetZ: 1.7 + 10.8, width: BUILDING_W, palette: level.guests.palette, hats: level.guests.hats, height: level.maxFloors * FLOOR_H });
   ui.attach(game, camera, nav);
   ui.hidePanel();
   const fr = frameAll();
@@ -176,11 +222,19 @@ function buildWorld(level, opts) {
   sun.shadow.camera.updateProjectionMatrix();
 }
 
+function fxHook(kind, pos) {
+  if (kind === 'coins') Fx.coins(pos, 5);
+  else if (kind === 'sparkles') Fx.sparkles(pos);
+  else if (kind === 'confetti') Fx.confetti(pos);
+}
+
 function startLevel(id, fresh) {
   const level = levelById(id);
   if (fresh) { try { localStorage.removeItem(`hotel-v5-${id}`); } catch { /* ignore */ } }
   current = { levelId: id, daily: false };
-  map.hide();
+  mode = 'game';
+  map.hide(); menu.hide();
+  Music.want(level.id);
   buildWorld(level, { perks: Meta.get().perks });
   document.getElementById('game-ui').classList.remove('hidden');
   if (level.id === 'br' && !Meta.get().seenTutorial) {
@@ -194,7 +248,9 @@ function startLevel(id, fresh) {
 function startDaily() {
   const { level, seed } = dailyLevel();
   current = { levelId: level.id, daily: true };
-  map.hide();
+  mode = 'game';
+  map.hide(); menu.hide();
+  Music.want(level.id);
   buildWorld(level, { daily: true, seed });
   document.getElementById('game-ui').classList.remove('hidden');
   ui.event({ icon: 'party', title: 'Desafio do dia', text: `${level.name}: 4 meses, sem bônus. Faça a maior pontuação!`, kind: 'info' });
@@ -202,10 +258,47 @@ function startDaily() {
 
 function showMap() {
   if (game) game.save();
+  mode = 'map';
   ui.closeModal();
+  menu.hide();
   document.getElementById('game-ui').classList.add('hidden');
   document.getElementById('intro').classList.add('hidden');
   map.show();
+}
+
+// menu principal: hotel de demonstração funcionando sozinho ao fundo
+function startDemo() {
+  const level = levelById('br');
+  current = { levelId: 'br', demo: true };
+  buildWorld(level, { demo: true, seed: 7 });
+  const g = game;
+  g.state.money = 1e6;
+  g.buyUpgrade('floor'); g.buyUpgrade('floor');
+  [[0, 4, 'room'], [0, 5, 'snack'], [1, 0, 'room'], [1, 1, 'room'], [1, 2, 'pool'], [1, 3, 'room'], [1, 4, 'room'], [1, 5, 'gym'], [2, 0, 'room'], [2, 1, 'room'], [2, 2, 'room'], [2, 3, 'room'], [2, 4, 'room'], [2, 5, 'room']]
+    .forEach(([f, i, t]) => g.build(f, i, t));
+  for (const r of g.rooms()) { if (r.f === 2) { g.upgradeRoom(r.f, r.i); g.upgradeRoom(r.f, r.i); } else if (r.f === 1) g.upgradeRoom(r.f, r.i); }
+  ['reception', 'maid', 'maid', 'maid', 'concierge', 'decor', 'decor', 'tech', 'generator'].forEach((k) => g.buyUpgrade(k));
+  g.state.rating = 4.5;
+  g.state.time = 10;
+  g.speed = 1.5;
+  for (let k = 0; k < 400; k++) g.update(0.05); // já começa movimentado
+  g.state.time = 8.5; // de manhã
+  g.speed = 0.6;
+  const fr = frameAll();
+  cam.target.copy(fr.target); cam.dist = fr.dist * 0.9;
+  cam.target.x += fr.dist * 0.12;
+  applyCamera();
+}
+
+function showMenu() {
+  if (game && !current?.demo) game.save();
+  mode = 'menu';
+  ui.closeModal();
+  map.hide();
+  document.getElementById('game-ui').classList.add('hidden');
+  if (!current?.demo) startDemo();
+  menu.show();
+  Music.want('menu');
 }
 
 async function onSeasonEnd(res) {
@@ -223,7 +316,14 @@ async function onSeasonEnd(res) {
   }
 }
 
-const map = new WorldMap(ui, { play: (id, fresh) => startLevel(id, fresh), playDaily: () => startDaily() });
+const map = new WorldMap(ui, { play: (id, fresh) => startLevel(id, fresh), playDaily: () => startDaily(), toMenu: () => showMenu() });
+const menu = new MainMenu(ui, {
+  toMap: () => showMap(),
+  continueLevel: (id) => startLevel(id, false),
+  daily: () => map.openDaily(),
+  perks: () => map.openPerks(),
+  applyQuality: () => applyQuality(),
+});
 
 function reframe() {
   const fr = frameAll();
@@ -277,6 +377,7 @@ function updateDayNight() {
   const lampK = dark ? 0 : night;
   for (const m of env.lamps) m.emissive.setRGB(lampK, lampK * 0.85, lampK * 0.45);
   for (const m of env.glows) m.emissiveIntensity = night * 0.9;
+  view?.setNight(night);
   if (env.water) env.water.offset.x += 0.0004;
 }
 
@@ -288,7 +389,7 @@ let drag = null;
 let pinch = null;
 
 function pick(x, y) {
-  if (!game || game.ended) return null;
+  if (!game || game.ended || mode !== 'game') return null;
   ndc.set((x / window.innerWidth) * 2 - 1, -(y / window.innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const guestHits = game.guests.filter((g) => g.state === 'queue' || g.state === 'arriving').map((g) => g.hit);
@@ -363,6 +464,7 @@ function worldPerPx() {
 }
 
 canvas.addEventListener('pointerdown', (e) => {
+  if (mode !== 'game') return;
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 1) {
@@ -408,7 +510,7 @@ canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
-  if (!game) return;
+  if (!game || mode !== 'game') return;
   cam.dist = THREE.MathUtils.clamp(cam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 10, 140);
   cam.goalDist = null;
   applyCamera();
@@ -422,7 +524,9 @@ function clampTarget() {
 
 const keys = new Set();
 window.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || !game || map.visible) return;
+  if (e.key === 'Escape' && ui.modalOpen) { ui.closeModal(); return; }
+  if (e.key === 'Escape' && !document.getElementById('intro').classList.contains('hidden')) { document.getElementById('intro').classList.add('hidden'); return; }
+  if (e.target.tagName === 'INPUT' || !game || mode !== 'game') return;
   keys.add(e.key.toLowerCase());
   if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.speed === 0 ? (ui.prevSpeed || 1) : (ui.prevSpeed = game.speed, 0)); }
   if (e.key === '1') ui.setSpeed(1);
@@ -459,8 +563,8 @@ let hudAcc = 0;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  if (game && intro.classList.contains('hidden') && !map.visible) game.update(dt);
-  if (game) updateKeys(dt);
+  if (game && intro.classList.contains('hidden') && mode !== 'map') game.update(dt);
+  if (game && mode === 'game') updateKeys(dt);
   if (cam.goal) {
     const k = 1 - Math.pow(0.01, dt);
     cam.target.lerp(cam.goal, k);
@@ -469,6 +573,16 @@ function frame(now) {
     applyCamera();
   }
   const spd = game ? Math.max(0.5, game.speed) : 1;
+  // fogos de artifício nas noites de festival
+  if (game && mode !== 'map' && game.festivalActive() && game.nightFactor() > 0.6 && Math.random() < dt * 0.9 * spd) {
+    Fx.firework(new THREE.Vector3(Math.random() * BUILDING_W, game.state.floors * FLOOR_H + 5 + Math.random() * 6, -6 - Math.random() * 6));
+  }
+  if (mode !== 'map') Fx.update(dt * Math.max(0.5, Math.min(spd, 2)));
+  // menu: câmera passeia devagar
+  if (mode === 'menu') {
+    cam.yaw = 0.14 + Math.sin(now / 9000) * 0.32;
+    applyCamera();
+  }
   if (env) {
     env.cars[0].position.x += dt * 6 * spd;
     if (env.cars[0].position.x > BUILDING_W + 60) env.cars[0].position.x = -60;
@@ -478,7 +592,7 @@ function frame(now) {
 
   updateDayNight();
   hudAcc += dt;
-  if (hudAcc > 0.1 && game && !map.visible) {
+  if (hudAcc > 0.1 && game && mode === 'game') {
     hudAcc = 0;
     ui.updateHUD();
     ui.refreshModal();
@@ -486,13 +600,16 @@ function frame(now) {
     if (game.selected || pst === 'cleaning' || pst === 'repairing' || pst === 'occupied') ui.changed();
   }
   saveAcc += dt;
-  if (saveAcc > 10 && game) { saveAcc = 0; game.save(); }
+  if (saveAcc > 10 && game && mode === 'game') { saveAcc = 0; game.save(); }
   for (const c of clouds) {
     c.position.x += dt * c.userData.speed * spd;
     if (c.position.x > BUILDING_W + 110) c.position.x = -110;
   }
   skyDome.position.copy(camera.position);
-  if (!map.visible) composer.render();
+  if (mode !== 'map') {
+    if (bloom.enabled || quality() !== 'low') composer.render();
+    else renderer.render(scene, camera);
+  }
   requestAnimationFrame(frame);
 }
 
@@ -506,10 +623,16 @@ document.getElementById('intro-start').onclick = () => {
   intro.classList.add('hidden');
 };
 
-resize();
+// áudio: navegadores só tocam som depois do primeiro toque/clique/tecla
+const firstGesture = () => { unlockAudio(); Music.unlock(); };
+window.addEventListener('pointerdown', firstGesture, { once: false, capture: true });
+window.addEventListener('keydown', firstGesture, { capture: true });
+Music.init();
+
+applyQuality();
 applyCamera();
-showMap();
+showMenu();
 requestAnimationFrame(frame);
 
 // para depuração no console
-window.__hotel = { get game() { return game; }, get view() { return view; }, cam, applyCamera, ui, reframe, startLevel, startDaily, showMap, map, Meta };
+window.__hotel = { get game() { return game; }, get view() { return view; }, get mode() { return mode; }, cam, applyCamera, ui, reframe, startLevel, startDaily, showMap, showMenu, map, menu, Meta, Music, Fx };

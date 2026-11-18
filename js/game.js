@@ -37,10 +37,11 @@ export class Game {
     this.level = level;
     this.mods = level.mods || {};
     this.daily = !!opts.daily;
+    this.demo = !!opts.demo; // demonstração do menu: sem salvar e sem fim de temporada
     this.perks = this.daily ? {} : (opts.perks || {});
     this.r = opts.seed ? mulberry32(opts.seed) : Math.random;
-    this.seasonMonths = this.daily ? DAILY_MONTHS : SEASON_MONTHS;
-    this.saveKey = this.daily ? null : `hotel-v5-${level.id}`;
+    this.seasonMonths = this.demo ? 9999 : this.daily ? DAILY_MONTHS : SEASON_MONTHS;
+    this.saveKey = this.daily || this.demo ? null : `hotel-v5-${level.id}`;
     this.guests = [];
     this.queue = [];
     this.staff = [];
@@ -55,6 +56,7 @@ export class Game {
     this.load();
   }
 
+  sfx(name) { if (!this.demo) Sfx[name](); }
   rand(a, b) { return a + this.r() * (b - a); }
   randi(a, b) { return Math.floor(this.rand(a, b + 1)); }
   perk(id) { return this.perks[id] || 0; }
@@ -74,7 +76,7 @@ export class Game {
       upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])),
       stats: { guests: 0, earned: 0, angry: 0, best: 0, requests: 0, combo: 0, bestCombo: 0, dayIncome: 0 },
       event: null,       // evento agendado/ativo: { type, at, until }
-      tutorial: this.level.id === 'br' && !this.daily && !this.hooks.seenTutorial?.(),
+      tutorial: this.level.id === 'br' && !this.daily && !this.demo && !this.hooks.seenTutorial?.(),
     };
   }
 
@@ -113,9 +115,15 @@ export class Game {
     try { localStorage.removeItem(this.saveKey); } catch { /* ignore */ }
   }
 
+  disposeGuest(g) {
+    this.scene.remove(g.mesh);
+    g.bubble.tex.dispose();
+    g.bubble.sprite.material.dispose();
+  }
+
   // remove pessoas da cena (ao trocar de hotel)
   dispose() {
-    for (const g of this.guests) this.scene.remove(g.mesh);
+    for (const g of this.guests) this.disposeGuest(g);
     for (const m of this.staff) this.scene.remove(m.mesh);
     for (const f of this.fans) this.scene.remove(f);
     this.guests = []; this.queue = []; this.staff = []; this.fans = [];
@@ -201,7 +209,12 @@ export class Game {
 
   goalStatus() {
     const st = this.state, s = st.stats;
-    return this.level.goals.map((goal) => {
+    const goals = this.daily ? [
+      { kind: 'guests', value: 30, label: 'Atender 30 hóspedes' },
+      { kind: 'rating', value: 4.0, label: 'Terminar com ★ 4,0' },
+      { kind: 'angry', value: 3, label: 'No máximo 3 irritados' },
+    ] : this.level.goals;
+    return goals.map((goal) => {
       let done = false, text = '';
       if (goal.kind === 'earned') { done = s.earned >= goal.value; text = `$${s.earned.toLocaleString('pt-BR')} / $${goal.value.toLocaleString('pt-BR')}`; }
       else if (goal.kind === 'rating') { done = st.rating >= goal.value; text = `★ ${st.rating.toFixed(1)} / ${goal.value.toFixed(1)}`; }
@@ -418,7 +431,7 @@ export class Game {
     const sl = this.slot(f, i);
     if (!sl || sl.type !== 'room') return false;
     if (sl.status !== 'clean') {
-      Sfx.error();
+      this.sfx('error');
       const msg = { dirty: 'Esse quarto está sujo! Limpe antes.', cleaning: 'Esse quarto ainda está sendo limpo.', broken: 'Esse quarto está quebrado! Conserte antes.', repairing: 'Esse quarto está em conserto.' }[sl.status] || 'Quarto ocupado.';
       this.hooks.toast(msg, 'warn');
       return false;
@@ -434,7 +447,7 @@ export class Game {
     const stand = this.bedStand(f, i);
     this.setPath(g, this.route(g, f, stand.x, stand.z), () => this.enterBed(g));
     this.updateQueueTargets();
-    Sfx.select();
+    if (!this.demo) this.sfx('select');
     // combo: atender rápido em sequência
     const s = this.state.stats;
     if (g.waitFrac >= 0.6) {
@@ -536,7 +549,7 @@ export class Game {
       this.seenRequest = true;
       this.hooks.toast(`Quarto ${this.roomNumber(g.room.f, g.room.i)} pediu ${req.name}! Clique no quarto (placa roxa) para atender.`, 'info');
     }
-    Sfx.bell();
+    this.sfx('bell');
   }
 
   fulfillRequest(f, i) {
@@ -622,7 +635,7 @@ export class Game {
     this.bumpRating(0, 0.05);
     if (g.inspector) { this.state.rating = clamp(this.state.rating - 0.4, 0.5, 5); this.hooks.event?.({ icon: 'angry', title: 'O inspetor foi embora!', text: 'Ele cansou de esperar. Avaliação −0,4.', kind: 'bad' }); }
     if (g.celebrity) { this.state.rating = clamp(this.state.rating - 0.5, 0.5, 5); this.dismissFans(); this.hooks.event?.({ icon: 'angry', title: 'A celebridade foi embora!', text: 'Saiu nos jornais... Avaliação −0,5.', kind: 'bad' }); }
-    Sfx.angry();
+    this.sfx('angry');
     this.hooks.toast(`${g.name} cansou de esperar e foi embora!`, 'bad');
     this.setPath(g, [[g.mesh.position.x, 0, LOBBY_IN_Z], [DOOR_X, 0, LOBBY_IN_Z]], () => this.walkAway(g));
     this.updateQueueTargets();
@@ -640,13 +653,14 @@ export class Game {
     this.state.stats.earned += amount;
     this.state.stats.dayIncome += amount;
     this.hooks.popup(pos, label || `+$${amount}`, color);
-    Sfx.coin();
+    this.hooks.fx?.('coins', pos);
+    if (!this.demo) this.sfx('coin');
     this.hooks.changed();
   }
 
   spend(amount) {
     if (this.state.money < amount) {
-      Sfx.error();
+      this.sfx('error');
       this.hooks.toast('Dinheiro insuficiente!', 'warn');
       return false;
     }
@@ -658,7 +672,7 @@ export class Game {
   select(g) {
     if (this.selected) this.selected.ring.visible = false;
     this.selected = g;
-    if (g) { g.ring.visible = true; Sfx.click(); }
+    if (g) { g.ring.visible = true; this.sfx('click'); }
     this.hooks.changed();
   }
 
@@ -678,7 +692,7 @@ export class Game {
       return;
     }
     if (this.manualJob) {
-      Sfx.error();
+      this.sfx('error');
       this.hooks.toast('Você já está ocupado com outro quarto! Contrate funcionários em MELHORIAS.', 'warn');
       return;
     }
@@ -688,7 +702,7 @@ export class Game {
     sl.worker = 'you';
     this.manualJob = { f, i, kind };
     if (kind === 'repair') this.hooks.popup(this.slotCenter(f, i, 2), `-$${REPAIR_COST} conserto`, '#ff8a80');
-    Sfx.click();
+    this.sfx('click');
     this.hooks.changed();
   }
   startManualClean(f, i) { this.startManualJob(f, i); }
@@ -702,7 +716,8 @@ export class Game {
     sl.claimed = null;
     this.view.setDirty(f, i, false);
     if (this.manualJob && this.manualJob.f === f && this.manualJob.i === i) this.manualJob = null;
-    Sfx.clean();
+    if (!this.demo) this.sfx('clean');
+    this.hooks.fx?.('sparkles', this.slotCenter(f, i, 0.3));
     this.hooks.popup(this.slotCenter(f, i, 1.8), wasRepair ? 'Consertado!' : 'Limpo!', '#9fe870');
     this.hooks.changed();
   }
@@ -782,7 +797,7 @@ export class Game {
     if (!this.spend(cost)) return false;
     this.state.slots[f][i] = type === 'room' ? { type: 'room', tier: 0, status: 'clean' } : { type };
     this.syncSlot(f, i);
-    Sfx.build();
+    if (!this.demo) this.sfx('build');
     this.hooks.popup(this.slotCenter(f, i, 2), `-$${cost}`, '#ff8a80');
     this.hooks.toast(`${type === 'room' ? 'Quarto' : this.facilityName(type)} construído(a)!`, 'good');
     this.hooks.changed();
@@ -793,14 +808,14 @@ export class Game {
   upgradeRoom(f, i) {
     const sl = this.slot(f, i);
     if (sl.type !== 'room' || sl.tier >= 2) return;
-    if (sl.status === 'occupied') { this.hooks.toast('Espere o hóspede sair para reformar.', 'warn'); Sfx.error(); return; }
+    if (sl.status === 'occupied') { this.hooks.toast('Espere o hóspede sair para reformar.', 'warn'); this.sfx('error'); return; }
     const next = TIERS[sl.tier + 1];
     if (!this.spend(this.roomUpgradeCost(sl.tier + 1))) return;
     sl.tier++;
     sl.status = 'clean'; sl.claimed = null; sl.workP = null;
     if (this.manualJob && this.manualJob.f === f && this.manualJob.i === i) this.manualJob = null;
     this.syncSlot(f, i);
-    Sfx.build();
+    this.sfx('build');
     this.hooks.toast(`Quarto ${this.roomNumber(f, i)} agora é ${next.name}!`, 'good');
     this.save();
   }
@@ -808,9 +823,9 @@ export class Game {
   demolish(f, i) {
     const sl = this.slot(f, i);
     if (sl.type === 'empty' || sl.type === 'lobby') return;
-    if (sl.type === 'room' && sl.status === 'occupied') { this.hooks.toast('Há um hóspede nesse quarto!', 'warn'); Sfx.error(); return; }
-    if (this.guests.some((g) => g.facility && g.facility.f === f && g.facility.i === i)) { this.hooks.toast('Há hóspedes usando esse espaço!', 'warn'); Sfx.error(); return; }
-    if (sl.type === 'room' && this.rooms().length <= 1) { this.hooks.toast('Você precisa de pelo menos um quarto!', 'warn'); Sfx.error(); return; }
+    if (sl.type === 'room' && sl.status === 'occupied') { this.hooks.toast('Há um hóspede nesse quarto!', 'warn'); this.sfx('error'); return; }
+    if (this.guests.some((g) => g.facility && g.facility.f === f && g.facility.i === i)) { this.hooks.toast('Há hóspedes usando esse espaço!', 'warn'); this.sfx('error'); return; }
+    if (sl.type === 'room' && this.rooms().length <= 1) { this.hooks.toast('Você precisa de pelo menos um quarto!', 'warn'); this.sfx('error'); return; }
     if (this.manualJob && this.manualJob.f === f && this.manualJob.i === i) this.manualJob = null;
     for (const m of this.staff) if (m.target && m.target.f === f && m.target.i === i && m.state !== 'idle') this.staffGoHome(m);
     this.state.slots[f][i] = { type: 'empty' };
@@ -848,7 +863,7 @@ export class Game {
     } else {
       this.hooks.toast(`${u.name} adquirido!`, 'good');
     }
-    Sfx.build();
+    this.sfx('build');
     this.hooks.changed();
     this.save();
     return true;
@@ -874,7 +889,7 @@ export class Game {
   triggerEvent() {
     const e = this.state.event;
     e.active = true;
-    const ev = (o) => { this.hooks.event?.(o); Sfx.bell(); };
+    const ev = (o) => { this.hooks.event?.(o); this.sfx('bell'); };
     if (e.type === 'inspector') {
       this.spawnGuest({ inspector: true });
       ev({ icon: 'magnifier', title: 'Inspetor disfarçado!', text: 'Um inspetor de hotéis chegou (balão dourado). Dê o quarto certo e atenda rápido: avaliação ±0,4.', kind: 'info' });
@@ -949,7 +964,7 @@ export class Game {
       this.spawnAcc -= 1;
       if (this.queue.length < QUEUE_MAX) {
         this.spawnGuest();
-        Sfx.bell();
+        if (!this.demo) this.sfx('bell');
       }
     }
 
@@ -1031,7 +1046,7 @@ export class Game {
     }
     const gone = this.guests.filter((g) => g.state === 'gone');
     if (gone.length) {
-      for (const g of gone) this.scene.remove(g.mesh);
+      for (const g of gone) this.disposeGuest(g);
       this.guests = this.guests.filter((g) => g.state !== 'gone');
     }
     for (const f of this.fans) animatePerson(f, dt, false, 2);
@@ -1101,6 +1116,7 @@ export class Game {
   }
 
   newDay(prevDay) {
+    if (this.demo) { this.state.stats.dayIncome = 0; return; }
     const sal = this.salaries();
     const s = this.state.stats;
     const income = s.dayIncome;
@@ -1112,11 +1128,12 @@ export class Game {
     s.best = Math.max(s.best, income);
     if (this.state.tutorial && prevDay >= 2) this.state.tutorial = false;
     if (prevDay >= this.seasonMonths) { this.endSeason(); return; }
-    Sfx.day();
+    this.sfx('day');
     this.hooks.toast(`Fim de ${MONTHS[(prevDay - 1) % 12]}: ganhou $${income}${sal ? `, salários −$${sal}` : ''}.`, 'good');
     // festival: aviso no mês anterior e no início
     const fest = this.level.festival;
     const m = this.monthIndex + 1;
+    if (fest?.months.includes(m)) this.hooks.fx?.('confetti', new THREE.Vector3(8.7, 2.4, 0.5));
     if (fest?.months.includes(m)) this.hooks.event?.({ icon: 'party', title: `${fest.name} começou!`, text: 'Muito mais hóspedes chegando este mês. Prepare os quartos!', kind: 'info' });
     else if (fest?.months.includes(m + 1)) this.hooks.toast(`Mês que vem: ${fest.name}! Mais hóspedes vão chegar.`, 'info');
     if (this.mods.seasonal?.[m] && this.mods.seasonal[m] < 1 && !this.mods.seasonal[m - 1]) this.hooks.toast('Baixa temporada: menos hóspedes nos próximos meses.', 'info');
@@ -1140,7 +1157,7 @@ export class Game {
     };
     this.clearSave();
     this.select(null);
-    Sfx.day();
+    this.sfx('day');
     this.hooks.seasonEnd?.(res);
   }
 }

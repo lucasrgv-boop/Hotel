@@ -52,19 +52,47 @@
   <div id="toasts"></div>
   </div>
 
+  <div id="menu-screen" class="hidden">
+    <div class="mm-card">
+      <div class="mm-logo">
+        <span class="mm-bell" aria-hidden="true">🛎️</span>
+        <h1>Hotel <em>Paraíso</em></h1>
+        <p>Administre hotéis pelo mundo</p>
+      </div>
+      <nav class="mm-buttons" aria-label="Menu principal">
+        <button id="mm-continue" class="mm-btn primary hidden">Continuar<small></small></button>
+        <button id="mm-play" class="mm-btn primary">Jogar<small>Mapa-múndi</small></button>
+        <button id="mm-daily" class="mm-btn">Desafio do dia</button>
+        <button id="mm-perks" class="mm-btn">Bônus da rede</button>
+        <div class="mm-row">
+          <button id="mm-help" class="mm-btn small">Como jogar</button>
+          <button id="mm-settings" class="mm-btn small">Configurações</button>
+        </div>
+        <button id="mm-credits" class="mm-link">Créditos</button>
+      </nav>
+      <p class="mm-stars"><b>★</b> Estrelas: <span id="mm-stars">0 / 18</span></p>
+    </div>
+  </div>
+
   <div id="map" class="hidden">
     <header class="map-head">
-      <div class="map-title"><h1>Rede Hotel Paraíso</h1><p>Administre um hotel por temporada e conquiste o mundo.</p></div>
+      <div class="map-title"><h1>Mapa-múndi</h1><p>Escolha um hotel. Cada estrela conquistada libera o próximo destino.</p></div>
       <div class="map-stats">
         <span class="stat" title="Estrelas conquistadas"><b class="gold">★</b> <span id="map-stars">0/18</span></span>
         <span class="stat" title="Pontos para bônus da rede">Pontos <b id="map-points">0</b></span>
-        <button id="map-perks" class="btn">Bônus da rede</button>
-        <button id="map-daily" class="btn primary">Desafio do dia</button>
-        <button id="map-help" class="btn icon" title="Como jogar">?</button>
       </div>
     </header>
     <div class="map-body">
-      <div class="map-wrap"><div class="map-board"><canvas id="map-canvas"></canvas><div id="map-pins"></div></div><div class="map-ribbon"><span>MAPA-MÚNDI</span></div></div>
+      <div class="map-wrap">
+        <nav class="map-tools" aria-label="Atalhos do mapa">
+          <button id="map-menu" class="tool t-red" title="Menu principal"><span>⌂</span><small>Menu</small></button>
+          <button id="map-perks" class="tool t-gold" title="Bônus da rede"><span>★</span><small>Bônus</small></button>
+          <button id="map-daily" class="tool t-purple" title="Desafio do dia"><span>🏆</span><small>Desafio</small></button>
+          <button id="map-help" class="tool t-green" title="Como jogar"><span>?</span><small>Ajuda</small></button>
+          <button id="map-music" class="tool t-blue" title="Música liga/desliga"><span>♪</span><small>Música</small></button>
+        </nav>
+        <div class="map-board"><canvas id="map-canvas"></canvas><div id="map-pins"></div></div>
+      </div>
       <aside id="map-card"></aside>
     </div>
   </div>

@@ -1,6 +1,8 @@
 // Tela do mapa-múndi: escolha do hotel, bônus da rede e desafio do dia.
 import { LEVELS, PERKS, perkCost, SEASON_MONTHS, DAILY_MONTHS, MONTHS } from './levels.js';
-import { drawPuzzleMap, project } from './mapdraw.js';
+import { drawIllustratedMap, project } from './mapdraw.js';
+import { Music } from './music.js';
+import { Settings } from './audio.js';
 import { Meta, dailyLevel, Board } from './meta.js';
 import { iconDataURL } from './textures.js';
 import { Sfx } from './audio.js';
@@ -20,12 +22,22 @@ export class WorldMap {
     $('map-perks').onclick = () => { Sfx.click(); this.openPerks(); };
     $('map-daily').onclick = () => { Sfx.click(); this.openDaily(); };
     $('map-help').onclick = () => { Sfx.click(); $('intro').classList.remove('hidden'); };
+    $('map-menu').onclick = () => { Sfx.click(); this.nav.toMenu?.(); };
+    $('map-music').onclick = () => {
+      Sfx.click();
+      Settings.set('music', Settings.get('music') ? 0 : 0.6);
+      this.syncMusicBtn();
+    };
     window.addEventListener('resize', () => { if (this.visible) this.draw(); });
     document.fonts?.ready?.then(() => { if (this.visible) this.draw(); });
   }
 
+  syncMusicBtn() { $('map-music').classList.toggle('off', !Settings.get('music')); }
+
   show() {
     this.visible = true;
+    this.syncMusicBtn();
+    Music.want('map');
     $('map').classList.remove('hidden');
     document.body.classList.add('on-map');
     // seleciona o próximo hotel a jogar
@@ -55,7 +67,7 @@ export class WorldMap {
     const r = c.getBoundingClientRect();
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     c.width = Math.max(1, r.width * dpr); c.height = Math.max(1, r.height * dpr);
-    drawPuzzleMap(c);
+    drawIllustratedMap(c);
     const g = c.getContext('2d');
     const W = c.width, H = c.height;
     // rota da viagem entre os hotéis
@@ -64,7 +76,7 @@ export class WorldMap {
       const [x1, y1] = project(LEVELS[k].lon, LEVELS[k].lat);
       const [x2, y2] = project(LEVELS[k + 1].lon, LEVELS[k + 1].lat);
       const done = Meta.starCount(LEVELS[k].id) > 0;
-      g.strokeStyle = done ? '#ffffff' : 'rgba(255,255,255,0.7)';
+      g.strokeStyle = done ? '#ef5a2a' : 'rgba(58,51,64,0.55)';
       g.setLineDash(done ? [] : [6 * dpr, 7 * dpr]);
       const mx = (x1 + x2) / 2 * W, my = Math.min(y1, y2) * H - 0.12 * H;
       g.beginPath(); g.moveTo(x1 * W, y1 * H); g.quadraticCurveTo(mx, my, x2 * W, y2 * H); g.stroke();

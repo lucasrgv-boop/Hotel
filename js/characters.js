@@ -79,8 +79,10 @@ export function createPerson(opts = {}) {
   const hm = mesh(geo.hair, mat(hair, 0.9)); hm.rotation.x = -0.35; hm.position.z = -0.02; head.add(hm);
   if (hairStyle === 1) { const b = mesh(geo.bun, mat(hair, 0.9)); b.position.set(0, 0.22, -0.2); head.add(b); }
   if (hairStyle === 2) { const b = mesh(geo.hair, mat(hair, 0.9)); b.scale.set(1.02, 1.25, 1.05); b.rotation.x = 0.9; b.position.set(0, -0.05, -0.04); head.add(b); }
+  const eyes = [];
   for (const x of [-0.11, 0.11]) {
     const e = mesh(geo.eye, mat(0x1d1a22, 0.3), false); e.position.set(x, 0.02, 0.27); e.scale.set(1, 1.3, 0.6); head.add(e);
+    eyes.push(e);
   }
   const n = mesh(geo.nose, mat(skin), false); n.position.set(0, -0.06, 0.29); head.add(n);
   if (opts.hat === 'chef') {
@@ -115,7 +117,8 @@ export function createPerson(opts = {}) {
     const ap = mesh(new THREE.BoxGeometry(0.4, 0.42, 0.04), mat(0xffffff)); ap.position.set(0, 0.62, 0.23); body.add(ap);
   }
 
-  root.userData.rig = { body, legL, legR, armL, armR, head, shadow: sh };
+  root.userData.rig = { body, legL, legR, armL, armR, head, shadow: sh, eyes };
+  root.userData.blink = 2 + Math.random() * 4;
   root.userData.look = { skin, hair, shirt, hairStyle, hat: opts.hat, hatColor: opts.hatColor };
   root.userData.walkT = Math.random() * 10;
   return root;
@@ -123,6 +126,11 @@ export function createPerson(opts = {}) {
 
 export function animatePerson(p, dt, moving, speed = 1) {
   const rig = p.userData.rig;
+  // pisca de vez em quando
+  p.userData.blink -= dt;
+  const closed = p.userData.blink < 0.12;
+  if (p.userData.blink < 0) p.userData.blink = 2.5 + Math.random() * 4;
+  for (const e of rig.eyes || []) e.scale.y = closed ? 0.2 : 1.3;
   if (moving) {
     p.userData.walkT += dt * 11 * speed;
     const a = Math.sin(p.userData.walkT) * 0.6;

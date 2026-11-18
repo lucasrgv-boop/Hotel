@@ -285,6 +285,19 @@ function buildRoom(g, slot, num) {
   glow.renderOrder = 1;
   g.add(glow);
   g.userData.status = { sign, barMat, glowMat };
+  // janela com cortinas na parede do fundo
+  {
+    const wx = 0.3, wy = 1.35, ww = 1.15, wh = 1.0, z = -ROOM_D + 0.06;
+    rbox(g, wx - 0.06, wy - 0.06, z, ww + 0.12, wh + 0.12, 0.06, 0xffffff, 0.02);
+    const glass = new THREE.MeshStandardMaterial({ color: 0xbfe6f7, emissive: 0x5aa8d8, emissiveIntensity: 0.35, roughness: 0.1 });
+    box(g, wx, wy, z + 0.04, ww, wh, 0.01, glass, false);
+    box(g, wx + ww / 2 - 0.02, wy, z + 0.05, 0.04, wh, 0.02, std(0xffffff), false);
+    box(g, wx, wy + wh * 0.5 - 0.02, z + 0.05, ww, 0.04, 0.02, std(0xffffff), false);
+    const curtain = [0xf2c6c6, 0xd7c6ef, 0xf3dc9c][tier];
+    for (const cx of [wx - 0.12, wx + ww - 0.14]) rbox(g, cx, wy - 0.12, z + 0.08, 0.26, wh + 0.32, 0.06, curtain, 0.03);
+    box(g, wx - 0.2, wy + wh + 0.18, z + 0.1, ww + 0.4, 0.04, 0.04, std(0xd4a93a, 0.4), false);
+    g.userData.windowGlass = glass;
+  }
   // quadro acima da cama e luminária
   rbox(g, bx + bedW / 2 - 0.55, 1.45, -ROOM_D + 0.05, 1.1, 0.75, 0.06, 0xffffff, 0.02);
   box(g, bx + bedW / 2 - 0.47, 1.52, -ROOM_D + 0.1, 0.94, 0.6, 0.01, new THREE.MeshStandardMaterial({ map: Tex.painting(num), roughness: 0.8 }), false);
@@ -664,7 +677,7 @@ export function buildEnvironment(scene, level = null) {
   W = BUILDING_W;
   const sc = level?.scenery || 'beach';
   const g = new THREE.Group();
-  const groundTex = sc === 'alps' ? Tex.snow() : sc === 'desert' || sc === 'beach' ? Tex.sand() : Tex.grass();
+  const groundTex = sc === 'alps' ? Tex.snow() : sc === 'desert' || sc === 'beach' ? Tex.sand() : sc === 'city' ? Tex.cobble() : Tex.grass();
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 220), new THREE.MeshStandardMaterial({ map: rep(groundTex, 70, 50), roughness: 1 }));
   ground.rotation.x = -Math.PI / 2; ground.position.set(W / 2, -0.32, 0); ground.receiveShadow = true;
   g.add(ground);
@@ -843,6 +856,8 @@ export class HotelView {
     const H = n * FLOOR_H;
     const th = this.theme;
     const side = texMat(Tex.facade(), (ROOM_D + FRONT_Z) / 3, n, th.facade, 0.9);
+    side.emissive = new THREE.Color(0xffc477); side.emissiveMap = side.map; side.emissiveIntensity = 0;
+    this.facadeMat = side;
     box(s, -0.45, -0.3, BACK_Z - 0.35, 0.45, H + 0.3, FRONT_Z - BACK_Z + 0.35, side);
     box(s, W, -0.3, BACK_Z - 0.35, 0.45, H + 0.3, FRONT_Z - BACK_Z + 0.35, side);
     box(s, -0.45, -0.3, BACK_Z - 0.5, W + 0.9, H + 0.3, 0.2, std(th.facade, 0.9), false);
@@ -949,6 +964,15 @@ export class HotelView {
     if (!g) return;
     const k = on ? Math.max(0.15, night) : 0;
     for (const m of g.userData.lamps || []) m.emissive.setRGB(k, k * 0.82, k * 0.45);
+  }
+
+  // à noite as janelas da fachada acendem e o vidro dos quartos escurece
+  setNight(night) {
+    if (this.facadeMat) this.facadeMat.emissiveIntensity = night * 0.35;
+    for (const g of this.slotGroups.values()) {
+      const gl = g.userData.windowGlass;
+      if (gl) { gl.emissive.setHex(night > 0.5 ? 0x1a2a5a : 0x5aa8d8); gl.color.setHex(night > 0.5 ? 0x2a3a6a : 0xbfe6f7); }
+    }
   }
 
   setLobbyLight(night) {
