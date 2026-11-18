@@ -1,20 +1,12 @@
 // Tela do mapa-múndi: escolha do hotel, bônus da rede e desafio do dia.
-import { LEVELS, PERKS, perkCost, WORLD, SEASON_MONTHS, DAILY_MONTHS, MONTHS } from './levels.js';
+import { LEVELS, PERKS, perkCost, SEASON_MONTHS, DAILY_MONTHS, MONTHS } from './levels.js';
+import { drawPuzzleMap, project } from './mapdraw.js';
 import { Meta, dailyLevel, Board } from './meta.js';
 import { iconDataURL } from './textures.js';
 import { Sfx } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const money = (v) => `$${Math.round(v).toLocaleString('pt-BR')}`;
-
-// decodifica a máscara de terra (bits) do mapa
-const LAND = (() => {
-  const bin = atob(WORLD.data);
-  const out = new Uint8Array(WORLD.W * WORLD.H);
-  for (let i = 0; i < out.length; i++) out[i] = (bin.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1;
-  return out;
-})();
-const project = (lon, lat) => [(lon + 180) / 360, (WORLD.LAT0 - lat) / (WORLD.LAT0 - WORLD.LAT1)];
 
 function hasSave(id) { try { return !!localStorage.getItem(`hotel-v5-${id}`); } catch { return false; } }
 
@@ -29,6 +21,7 @@ export class WorldMap {
     $('map-daily').onclick = () => { Sfx.click(); this.openDaily(); };
     $('map-help').onclick = () => { Sfx.click(); $('intro').classList.remove('hidden'); };
     window.addEventListener('resize', () => { if (this.visible) this.draw(); });
+    document.fonts?.ready?.then(() => { if (this.visible) this.draw(); });
   }
 
   show() {
@@ -62,25 +55,16 @@ export class WorldMap {
     const r = c.getBoundingClientRect();
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     c.width = Math.max(1, r.width * dpr); c.height = Math.max(1, r.height * dpr);
+    drawPuzzleMap(c);
     const g = c.getContext('2d');
     const W = c.width, H = c.height;
-    const grd = g.createLinearGradient(0, 0, 0, H);
-    grd.addColorStop(0, '#9fd8f0'); grd.addColorStop(1, '#6fc0e6');
-    g.fillStyle = grd; g.fillRect(0, 0, W, H);
-    const cw = W / WORLD.W, ch = H / WORLD.H;
-    const rad = Math.min(cw, ch) * 0.42;
-    for (let y = 0; y < WORLD.H; y++) for (let x = 0; x < WORLD.W; x++) {
-      const land = LAND[y * WORLD.W + x];
-      g.fillStyle = land ? '#f6ecd6' : 'rgba(255,255,255,0.16)';
-      g.beginPath(); g.arc((x + 0.5) * cw, (y + 0.5) * ch, land ? rad : rad * 0.45, 0, Math.PI * 2); g.fill();
-    }
     // rota da viagem entre os hotéis
     g.lineWidth = Math.max(2, 3 * dpr); g.lineCap = 'round';
     for (let k = 0; k < LEVELS.length - 1; k++) {
       const [x1, y1] = project(LEVELS[k].lon, LEVELS[k].lat);
       const [x2, y2] = project(LEVELS[k + 1].lon, LEVELS[k + 1].lat);
       const done = Meta.starCount(LEVELS[k].id) > 0;
-      g.strokeStyle = done ? '#ef7a45' : 'rgba(58,51,64,0.35)';
+      g.strokeStyle = done ? '#ffffff' : 'rgba(255,255,255,0.7)';
       g.setLineDash(done ? [] : [6 * dpr, 7 * dpr]);
       const mx = (x1 + x2) / 2 * W, my = Math.min(y1, y2) * H - 0.12 * H;
       g.beginPath(); g.moveTo(x1 * W, y1 * H); g.quadraticCurveTo(mx, my, x2 * W, y2 * H); g.stroke();

@@ -39,7 +39,13 @@
     </div>
   </header>
 
+  <div id="leftcol">
   <section id="goals" aria-label="Metas da temporada"></section>
+  <section id="queue" class="empty" aria-label="Fila da recepção">
+    <div class="q-head"><b>Fila da recepção</b><span id="queue-count"></span><span class="q-tip">clique para escolher</span></div>
+    <div id="queue-list"></div>
+  </section>
+  </div>
   <div id="banner" class="hidden" role="status"></div>
   <aside id="panel" class="hidden"></aside>
   <div id="hint"></div>
@@ -58,7 +64,7 @@
       </div>
     </header>
     <div class="map-body">
-      <div class="map-wrap"><canvas id="map-canvas"></canvas><div id="map-pins"></div></div>
+      <div class="map-wrap"><div class="map-board"><canvas id="map-canvas"></canvas><div id="map-pins"></div></div><div class="map-ribbon"><span>MAPA-MÚNDI</span></div></div>
       <aside id="map-card"></aside>
     </div>
   </div>
@@ -75,7 +81,7 @@
       <h1>Como jogar</h1>
       <p>Você é o gerente! Cada hotel dura uma <b>temporada de 12 meses</b>. Hóspedes chegam na <b>recepção</b> e esperam na fila.</p>
       <ol>
-        <li><b>Clique num hóspede</b> da fila e depois num <b>quarto livre</b>.</li>
+        <li><b>Clique num hóspede</b> (ou no rosto dele na <b>fila à esquerda</b>) e depois num <b>quarto livre</b>. O botão ✓ aloca direto no melhor quarto.</li>
         <li>O balão mostra o <b>tipo de quarto</b> que ele quer (cor) e as <b>diárias</b> (bolinhas).</li>
         <li>Quando ele sai, você recebe e o quarto fica <b>sujo</b>: clique nele para <b>limpar</b>.</li>
         <li>Use o dinheiro para <b>construir</b> quartos, lanchonete, academia, piscina e novos andares!</li>

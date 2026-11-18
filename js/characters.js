@@ -116,6 +116,7 @@ export function createPerson(opts = {}) {
   }
 
   root.userData.rig = { body, legL, legR, armL, armR, head, shadow: sh };
+  root.userData.look = { skin, hair, shirt, hairStyle, hat: opts.hat, hatColor: opts.hatColor };
   root.userData.walkT = Math.random() * 10;
   return root;
 }

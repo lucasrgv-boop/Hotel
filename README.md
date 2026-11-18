@@ -4,9 +4,9 @@ Jogo simples de administrar um hotel, em **3D estilo cartoon visto de lado** (ca
 
 ## Como jogar
 
-O jogo começa num **mapa-múndi**. Cada hotel é uma **temporada de 12 meses** (1 mês = 1 dia de jogo, cerca de 1 minuto).
+O jogo começa num **mapa-múndi** em estilo quebra-cabeça de madeira. Cada hotel é uma **temporada de 12 meses** (1 mês = 1 dia de jogo, cerca de 1 minuto).
 
-- Hóspedes chegam pela rua e fazem fila na **recepção**. **Clique num hóspede** e depois num **quarto livre** (ou clique direto num quarto livre para alocar o primeiro da fila).
+- Hóspedes chegam pela rua e fazem fila na **recepção**. A **fila à esquerda** mostra o rosto de cada um, na ordem de chegada: clique no rosto (ou no boneco) e depois num **quarto livre**; o botão ✓ aloca direto no melhor quarto.
 - O balão mostra o **tipo de quarto** desejado (azul = Simples, roxo = Luxo, dourado = Suíte), as **diárias** (bolinhas), a **paciência** (anel) e um selo de exigência: **T** = idoso, quer o térreo; **↑** = quer andar alto.
 - A placa acima de cada quarto mostra a situação: **verde = LIVRE**, **vermelho = OCUPADO**, **laranja = SUJO**, **azul = LIMPANDO/CONSERTO**, **roxo = PEDIDO!** (toalha, comida ou barulho: clique para atender), **cinza = QUEBRADO** (clique para consertar por $40).
 - Atender rápido em sequência gera **combo** com bônus.

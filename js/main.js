@@ -89,13 +89,18 @@ function frameAll() {
   const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
   const floors = game.state.floors;
   const h = floors * FLOOR_H + 4.5;
-  const byW = (BUILDING_W + 4) / (2 * t * aspect);
-  const byH = h / (2 * t) * 1.08;
   const portrait = aspect < 0.9;
+  // no computador, a coluna da esquerda (metas + fila) ocupa ~290px: enquadra o prédio no resto da tela
+  const side = !portrait && window.innerWidth > 720 ? 290 : 0;
+  const availAspect = (window.innerWidth - side) / window.innerHeight;
+  const byW = (BUILDING_W + 4) / (2 * t * availAspect);
+  const byH = h / (2 * t) * 1.08;
+  const dist = THREE.MathUtils.clamp(portrait ? 17 / (2 * t * aspect) : Math.max(byW, byH), 16, 140);
+  const wpp = (2 * dist * t) / window.innerHeight;
   return {
     // em tela em pé, mostra o lobby e os primeiros quartos (arraste para ver o resto)
-    target: new THREE.Vector3(portrait ? 10 : BUILDING_W / 2, floors * FLOOR_H / 2 + 0.6, 0),
-    dist: THREE.MathUtils.clamp(portrait ? 17 / (2 * t * aspect) : Math.max(byW, byH), 16, 140),
+    target: new THREE.Vector3(portrait ? 10 : BUILDING_W / 2 - (side / 2) * wpp, floors * FLOOR_H / 2 + 0.6, 0),
+    dist,
   };
 }
 // pós-processamento: brilho (bloom) nas luzes e placas, com antisserrilhado (MSAA)

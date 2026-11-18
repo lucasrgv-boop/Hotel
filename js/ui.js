@@ -4,6 +4,52 @@ import { iconDataURL } from './textures.js';
 import { Sfx, isMuted, setMuted } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
+const css = (c) => '#' + (c >>> 0).toString(16).padStart(6, '0');
+
+// rosto do hóspede (mesmas cores do boneco 3D) para a fila lateral
+function faceDataURL(look) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 96;
+  const g = c.getContext('2d');
+  const skin = css(look.skin), hair = css(look.hair);
+  // ombros/camisa
+  g.fillStyle = css(look.shirt);
+  g.beginPath(); g.ellipse(48, 100, 38, 26, 0, 0, Math.PI * 2); g.fill();
+  // cabelo atrás (coque ou cabelo longo)
+  g.fillStyle = hair;
+  if (look.hairStyle === 2) { g.beginPath(); g.ellipse(48, 50, 33, 36, 0, 0, Math.PI * 2); g.fill(); }
+  if (look.hairStyle === 1) { g.beginPath(); g.arc(48, 14, 11, 0, Math.PI * 2); g.fill(); }
+  // rosto
+  g.fillStyle = skin;
+  g.beginPath(); g.arc(48, 48, 28, 0, Math.PI * 2); g.fill();
+  // cabelo em cima
+  g.fillStyle = hair;
+  g.beginPath(); g.arc(48, 46, 30, Math.PI * 1.02, Math.PI * 1.98); g.closePath(); g.fill();
+  g.beginPath(); g.ellipse(36, 30, 14, 8, -0.4, 0, Math.PI * 2); g.fill();
+  // olhos, bochechas e sorriso
+  g.fillStyle = '#1d1a22';
+  g.beginPath(); g.ellipse(38, 50, 3.5, 4.5, 0, 0, Math.PI * 2); g.ellipse(58, 50, 3.5, 4.5, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(239,90,110,0.35)';
+  g.beginPath(); g.arc(31, 60, 5, 0, Math.PI * 2); g.arc(65, 60, 5, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#1d1a22'; g.lineWidth = 2.5; g.lineCap = 'round';
+  g.beginPath(); g.arc(48, 60, 7, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke();
+  // acessórios
+  const hc = look.hatColor !== undefined ? css(look.hatColor) : '#f3e2a0';
+  if (look.hat === 'shades') {
+    g.fillStyle = '#1d1a22'; g.fillRect(28, 44, 40, 10); g.fillRect(46, 46, 4, 3);
+  } else if (look.hat === 'cap' || look.hat === 'beanie') {
+    g.fillStyle = hc; g.beginPath(); g.arc(48, 40, 30, Math.PI, 0); g.closePath(); g.fill();
+    if (look.hat === 'cap') { g.beginPath(); g.ellipse(62, 39, 20, 5, 0, 0, Math.PI * 2); g.fill(); }
+    else { g.fillStyle = '#ffffff'; g.beginPath(); g.arc(48, 9, 7, 0, Math.PI * 2); g.fill(); }
+  } else if (look.hat === 'beret') {
+    g.fillStyle = hc; g.beginPath(); g.ellipse(46, 22, 30, 11, -0.15, 0, Math.PI * 2); g.fill();
+  } else if (look.hat && look.hat !== 'none') {
+    g.fillStyle = hc; g.beginPath(); g.ellipse(48, 24, 42, 9, 0, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(48, 15, 22, 14, 0, Math.PI, 0); g.fill(); g.fillRect(26, 14, 44, 10);
+    g.fillStyle = '#d9473b'; g.fillRect(26, 18, 44, 5);
+  }
+  return c.toDataURL();
+}
 const tierHex = (t) => '#' + TIERS[t].color.toString(16).padStart(6, '0');
 const money = (v) => `$${Math.round(v).toLocaleString('pt-BR')}`;
 
@@ -30,6 +76,7 @@ export class UI {
     $('btn-map').onclick = () => { Sfx.click(); this.nav?.toMap(); };
     $('btn-sound').onclick = () => { setMuted(!isMuted()); this.syncSound(); Sfx.click(); };
     $('banner').onclick = () => $('banner').classList.add('hidden');
+    this.queueEls = new Map();
     this.syncSound();
     document.querySelectorAll('#speed button').forEach((b) => {
       b.onclick = () => { this.setSpeed(+b.dataset.speed); Sfx.click(); };
@@ -37,6 +84,9 @@ export class UI {
   }
 
   attach(game, camera, nav) {
+    for (const el of this.queueEls.values()) el.remove();
+    this.queueEls.clear();
+    this.lastQueueIds = null;
     this.game = game;
     this.camera = camera;
     this.nav = nav;
@@ -132,7 +182,68 @@ export class UI {
       $('n-dirty').parentElement.classList.toggle('zero', !dirty);
     }
     this.renderGoals();
+    this.renderQueue();
     if (this.dirty) { this.dirty = false; this.renderPanel(); }
+  }
+
+  // ---------- Fila lateral com o rosto de cada hóspede ----------
+  renderQueue() {
+    const g = this.game;
+    const box = $('queue-list');
+    const q = g.queue;
+    $('queue-count').textContent = q.length ? `${q.length}` : '';
+    $('queue').classList.toggle('empty', !q.length);
+    const ids = q.map((x) => x.id).join(',');
+    if (ids !== this.lastQueueIds) {
+      this.lastQueueIds = ids;
+      for (const [id, el] of this.queueEls) if (!q.some((x) => x.id === id)) { el.remove(); this.queueEls.delete(id); }
+      q.forEach((gu, k) => {
+        let el = this.queueEls.get(gu.id);
+        if (!el) {
+          el = document.createElement('div');
+          el.className = 'qcard';
+          el.setAttribute('role', 'button');
+          el.tabIndex = 0;
+          const look = gu.mesh.userData.look || {};
+          const price = TIERS[gu.want].price * (gu.want === 2 ? (g.mods.suiteMult || 1) : 1);
+          const badge = gu.inspector ? '<i class="qbadge gold" title="Inspetor">?</i>' : gu.celebrity ? '<i class="qbadge gold" title="Celebridade">★</i>'
+            : gu.trait === 'ground' ? '<i class="qbadge" title="Quer o térreo">T</i>' : gu.trait === 'high' ? '<i class="qbadge" title="Quer andar alto">↑</i>' : '';
+          el.innerHTML = `
+            <span class="qpos"></span>
+            <span class="qface"><img src="${faceDataURL(look)}" alt="">${badge}</span>
+            <span class="qinfo">
+              <span class="qname">${gu.name}</span>
+              <span class="qwant" title="Paga até ${money(price * gu.nights)}"><i style="background:${tierHex(gu.want)}"></i>${TIERS[gu.want].name} · ${gu.nights} diária${gu.nights > 1 ? 's' : ''}</span>
+              <span class="qbar"><i></i></span>
+            </span>
+            <button class="qauto" title="Alocar no melhor quarto livre">✓</button>`;
+          el.onclick = (e) => {
+            if (e.target.closest('.qauto')) return;
+            Sfx.click();
+            g.select(g.selected === gu ? null : gu);
+          };
+          el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); g.select(g.selected === gu ? null : gu); } };
+          el.querySelector('.qauto').onclick = () => {
+            const r = g.bestRoomFor(gu);
+            if (r) g.assign(gu, r.f, r.i); else { Sfx.error(); this.toast('Nenhum quarto livre e limpo!', 'warn'); }
+          };
+          this.queueEls.set(gu.id, el);
+        }
+        el.querySelector('.qpos').textContent = `${k + 1}º`;
+        box.appendChild(el); // mantém a ordem da fila
+      });
+    }
+    for (const gu of q) {
+      const el = this.queueEls.get(gu.id);
+      if (!el) continue;
+      const f = Math.max(0, gu.patience / gu.maxPatience);
+      const bar = el.querySelector('.qbar i');
+      bar.style.width = `${Math.round(f * 100)}%`;
+      bar.style.background = f > 0.55 ? '#52c45a' : f > 0.28 ? '#f5b82e' : '#ef4b5c';
+      el.classList.toggle('sel', g.selected === gu);
+      el.classList.toggle('urgent', f <= 0.28);
+      el.classList.toggle('walking', gu.state === 'arriving');
+    }
   }
 
   renderGoals() {
