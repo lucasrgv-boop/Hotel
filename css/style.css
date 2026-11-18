@@ -376,7 +376,17 @@ body.on-map #game { visibility: hidden; }
 }
 .qcard:hover { transform: translateX(3px); }
 .qcard:focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
-.qcard.sel { border-color: var(--gold); background: #fff8dc; }
+.qcard.sel { box-shadow: 0 0 0 4px #ffd34d, 0 6px 16px rgba(58, 51, 64, 0.25); transform: translateX(4px); }
+/* cor do cartão = tipo de quarto que o hóspede quer (mesmas cores das placas e balões) */
+.qcard.tier-0 { background: #e2f0fc; border-color: #4f9bd9; }
+.qcard.tier-1 { background: #f1e6fb; border-color: #a267d6; }
+.qcard.tier-2 { background: #fdf0cc; border-color: #f0b323; }
+.qcard.tier-0 .qface { background: #c4e0f7; }
+.qcard.tier-1 .qface { background: #e0cdf5; }
+.qcard.tier-2 .qface { background: #fae2a0; }
+.qcard.tier-0 .qauto { background: #4f9bd9; box-shadow: 0 2px 0 #3478b0; }
+.qcard.tier-1 .qauto { background: #a267d6; box-shadow: 0 2px 0 #7d48ad; }
+.qcard.tier-2 .qauto { background: #e0a20f; box-shadow: 0 2px 0 #b37f05; }
 .qcard.urgent { animation: qpulse 0.8s ease-in-out infinite alternate; }
 .qcard.walking .qname::after { content: ' · chegando'; font-family: var(--body); font-weight: 600; font-size: 11px; color: var(--ink-2); }
 @keyframes qpulse { to { box-shadow: 0 3px 0 #f0b0b0, 0 0 0 4px rgba(239, 75, 92, 0.35); } }

@@ -203,7 +203,7 @@ export class UI {
         let el = this.queueEls.get(gu.id);
         if (!el) {
           el = document.createElement('div');
-          el.className = 'qcard';
+          el.className = `qcard tier-${gu.want}`;
           el.setAttribute('role', 'button');
           el.tabIndex = 0;
           const look = gu.mesh.userData.look || {};

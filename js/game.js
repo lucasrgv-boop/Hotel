@@ -65,7 +65,7 @@ export class Game {
     const ground = emptyFloor();
     for (const i of LOBBY_SLOTS) ground[i] = { type: 'lobby' };
     ground[2] = { type: 'room', tier: 0, status: 'clean' };
-    ground[3] = { type: 'room', tier: 0, status: 'clean' };
+    ground[3] = { type: 'room', tier: 1, status: 'clean' }; // começa com um quarto de Luxo
     return {
       levelId: this.level.id,
       money: this.level.startMoney + this.perk('capital') * 150,
