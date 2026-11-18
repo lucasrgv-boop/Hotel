@@ -48,3 +48,11 @@ Também funciona publicado no GitHub Pages (é tudo estático).
 - `js/audio.js` — efeitos sonoros 8-bit via WebAudio.
 - `js/config.js` — preços, custos e balanceamento.
 - `vendor/three.module.min.js` — Three.js r170 (licença MIT).
+
+## Versão em arquivo único
+
+`dist/pixel-hotel.html` traz o jogo inteiro (CSS, JS e Three.js) num só arquivo HTML: basta abrir com duplo clique no navegador, sem precisar de servidor. Para gerá-lo de novo depois de mudar o código:
+
+```bash
+bash tools/build-single.sh
+```
