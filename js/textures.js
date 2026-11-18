@@ -140,6 +140,48 @@ export const Tex = {
     }
   })),
 
+  sand: () => cached('sand', () => makeTex(256, (g, s) => {
+    g.fillStyle = '#efd9a7'; g.fillRect(0, 0, s, s);
+    const r = rng(31);
+    for (let i = 0; i < 2600; i++) {
+      g.fillStyle = r() > 0.5 ? 'rgba(255,245,215,0.6)' : 'rgba(200,165,110,0.35)';
+      g.fillRect(r() * s, r() * s, 2, 2);
+    }
+  })),
+
+  snow: () => cached('snow', () => makeTex(256, (g, s) => {
+    g.fillStyle = '#f4f8fc'; g.fillRect(0, 0, s, s);
+    const r = rng(37);
+    for (let i = 0; i < 1600; i++) {
+      g.fillStyle = r() > 0.5 ? 'rgba(210,225,245,0.55)' : 'rgba(255,255,255,0.9)';
+      g.beginPath(); g.arc(r() * s, r() * s, 1 + r() * 2.5, 0, 7); g.fill();
+    }
+  })),
+
+  // calçadão com ondas pretas e brancas
+  wavePave: () => cached('wavepave', () => makeTex(256, (g, s) => {
+    g.fillStyle = '#f6f1e6'; g.fillRect(0, 0, s, s);
+    g.fillStyle = '#6b6870';
+    for (let band = 0; band < 2; band++) {
+      g.beginPath();
+      const y0 = band * s / 2;
+      g.moveTo(0, y0 + s * 0.12);
+      for (let x = 0; x <= s; x += 4) g.lineTo(x, y0 + s * 0.12 + Math.sin((x / s) * Math.PI * 2) * s * 0.1);
+      for (let x = s; x >= 0; x -= 4) g.lineTo(x, y0 + s * 0.3 + Math.sin((x / s) * Math.PI * 2) * s * 0.1);
+      g.closePath(); g.fill();
+    }
+  })),
+
+  // janelas de prédios ao fundo
+  windows: (base = 0x8a93a6, lit = 0.25) => cached('win' + base + lit, () => makeTex(128, (g, s) => {
+    g.fillStyle = hex(base); g.fillRect(0, 0, s, s);
+    const r = rng(base);
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 4; x++) {
+      g.fillStyle = r() < lit ? '#ffe7a8' : 'rgba(30,40,60,0.55)';
+      g.fillRect(x * 32 + 8, y * 16 + 4, 16, 9);
+    }
+  })),
+
   cobble: () => cached('cobble', () => makeTex(256, (g, s) => {
     g.fillStyle = '#9d9a94'; g.fillRect(0, 0, s, s);
     const r = rng(13);
@@ -336,6 +378,59 @@ const ICONS = {
     g.beginPath(); g.moveTo(-0.6, -0.2); g.lineTo(0.6, -0.7); g.lineTo(0.6, 0.7); g.lineTo(-0.6, 0.2); g.closePath(); g.fill();
     g.fillStyle = '#ffffff'; rr(g, -0.9, -0.25, 0.35, 0.5, 0.08); g.fill();
     g.fillStyle = '#555c66'; rr(g, -0.55, 0.15, 0.2, 0.55, 0.06); g.fill();
+  },
+  towel(g) {
+    g.fillStyle = '#4fb6e8'; rr(g, -0.8, -0.55, 1.6, 1.1, 0.12); g.fill();
+    g.fillStyle = '#ffffff'; g.fillRect(-0.8, -0.2, 1.6, 0.12); g.fillRect(-0.8, 0.12, 1.6, 0.12);
+    g.fillStyle = '#2f8fc9'; rr(g, -0.8, 0.35, 1.6, 0.2, 0.06); g.fill();
+  },
+  noise(g) {
+    g.fillStyle = '#3a3340';
+    g.beginPath(); g.moveTo(-0.85, -0.3); g.lineTo(-0.45, -0.3); g.lineTo(0, -0.7); g.lineTo(0, 0.7); g.lineTo(-0.45, 0.3); g.lineTo(-0.85, 0.3); g.closePath(); g.fill();
+    g.strokeStyle = '#ef4b5c'; g.lineWidth = 0.12; g.lineCap = 'round';
+    for (const r of [0.35, 0.65]) { g.beginPath(); g.arc(0.05, 0, r, -0.8, 0.8); g.stroke(); }
+  },
+  wrench(g) {
+    g.save(); g.rotate(-0.7);
+    g.fillStyle = '#7a8394'; rr(g, -0.14, -0.4, 0.28, 1.25, 0.12); g.fill();
+    g.beginPath(); g.arc(0, -0.55, 0.38, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffffff'; g.fillRect(-0.12, -0.98, 0.24, 0.42);
+    g.restore();
+  },
+  magnifier(g) {
+    g.strokeStyle = '#3a3340'; g.lineWidth = 0.2; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(0.3, 0.3); g.lineTo(0.8, 0.8); g.stroke();
+    g.fillStyle = '#bfe6f7'; g.beginPath(); g.arc(-0.12, -0.12, 0.55, 0, 7); g.fill();
+    g.lineWidth = 0.14; g.beginPath(); g.arc(-0.12, -0.12, 0.55, 0, 7); g.stroke();
+  },
+  sun(g) {
+    g.fillStyle = '#ffb02e';
+    for (let k = 0; k < 8; k++) { g.save(); g.rotate((k * Math.PI) / 4); rr(g, -0.08, -0.95, 0.16, 0.32, 0.06); g.fill(); g.restore(); }
+    g.fillStyle = '#ffd34d'; g.beginPath(); g.arc(0, 0, 0.5, 0, 7); g.fill();
+  },
+  bolt(g) {
+    g.fillStyle = '#ffc93c';
+    g.beginPath(); g.moveTo(0.15, -0.95); g.lineTo(-0.55, 0.1); g.lineTo(-0.05, 0.1); g.lineTo(-0.2, 0.95); g.lineTo(0.55, -0.15); g.lineTo(0.05, -0.15); g.closePath(); g.fill();
+    g.strokeStyle = '#d98a14'; g.lineWidth = 0.06; g.stroke();
+  },
+  party(g) {
+    g.fillStyle = '#a267d6';
+    g.beginPath(); g.moveTo(-0.8, 0.85); g.lineTo(-0.35, -0.45); g.lineTo(0.45, 0.35); g.closePath(); g.fill();
+    const cs = ['#ef4b5c', '#ffd34d', '#4fb6e8', '#52c45a'];
+    [[0.2, -0.6], [0.55, -0.25], [0.7, -0.75], [-0.05, -0.85], [0.85, 0.15]].forEach(([x, y], k) => { g.fillStyle = cs[k % 4]; g.fillRect(x - 0.07, y - 0.07, 0.14, 0.14); });
+  },
+  lock(g) {
+    g.strokeStyle = '#6b6272'; g.lineWidth = 0.16;
+    g.beginPath(); g.arc(0, -0.2, 0.38, Math.PI, 0); g.stroke();
+    g.fillStyle = '#8a8296'; rr(g, -0.6, -0.2, 1.2, 0.95, 0.12); g.fill();
+    g.fillStyle = '#3a3340'; g.beginPath(); g.arc(0, 0.2, 0.12, 0, 7); g.fill();
+  },
+  plane(g) {
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.ellipse(0, 0, 0.95, 0.16, 0, 0, 7); g.fill();
+    g.beginPath(); g.moveTo(-0.15, 0); g.lineTo(0.25, -0.75); g.lineTo(0.42, -0.75); g.lineTo(0.3, 0); g.fill();
+    g.beginPath(); g.moveTo(-0.15, 0); g.lineTo(0.25, 0.75); g.lineTo(0.42, 0.75); g.lineTo(0.3, 0); g.fill();
+    g.beginPath(); g.moveTo(-0.8, 0); g.lineTo(-0.7, -0.35); g.lineTo(-0.58, -0.35); g.lineTo(-0.6, 0); g.fill();
   },
   building(g) {
     g.fillStyle = '#f4efe6'; rr(g, -0.7, -0.75, 1.4, 1.6, 0.08); g.fill();

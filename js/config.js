@@ -14,15 +14,21 @@ export const WALL_H = FLOOR_H - 0.3;
 export const SLOT_W = 5;
 export const ROOM_D = 4.5;
 export const CORE_W = 3;        // poço do elevador
-export const COLS = 6;
-export const SLOTS_PER_FLOOR = COLS;
-export const BUILDING_W = CORE_W + COLS * SLOT_W;
+// número de colunas varia por hotel (ex.: Tóquio é estreito) — use setCols antes de montar a cena
+export let COLS = 6;
+export let SLOTS_PER_FLOOR = COLS;
+export let BUILDING_W = CORE_W + COLS * SLOT_W;
+export function setCols(n) {
+  COLS = n;
+  SLOTS_PER_FLOOR = n;
+  BUILDING_W = CORE_W + n * SLOT_W;
+}
 export const BACK_Z = -ROOM_D;
 export const FRONT_Z = 1.7;     // borda da frente do corredor
 export const CORRIDOR_Z = 0.85;
 export const ELEV_X = CORE_W / 2;
 export const ELEV_Z = -2.2;
-export const MAX_FLOORS = 5;
+export const MAX_FLOORS = 7;
 export const LOBBY_SLOTS = [0, 1];
 export const DOOR_X = CORE_W + 2 * SLOT_W - 1.4; // entrada do hotel (lado direito do lobby)
 export const STREET_Z = FRONT_Z + 1.8;
@@ -47,12 +53,15 @@ export const BUILDABLES = {
 };
 
 export const UPGRADES = {
-  floor:     { name: 'Novo Andar', desc: 'Constrói mais um andar com 6 espaços.', cost: (lvl) => 500 + lvl * 450, max: MAX_FLOORS - 1, icon: 'building' },
+  floor:     { name: 'Novo Andar', desc: 'Constrói mais um andar.', cost: (lvl) => 500 + lvl * 450, max: MAX_FLOORS - 1, icon: 'building' },
   maid:      { name: 'Camareira', desc: 'Limpa quartos sujos automaticamente. Salário $15/dia.', cost: (lvl) => 250 + lvl * 150, max: 5, icon: 'broom' },
   reception: { name: 'Recepcionista', desc: 'Aloca hóspedes automaticamente no melhor quarto. Salário $30/dia.', cost: () => 900, max: 1, icon: 'bell' },
   decor:     { name: 'Decoração do Lobby', desc: 'Plantas e sofás: hóspedes esperam com +30% de paciência.', cost: (lvl) => 200 + lvl * 300, max: 2, icon: 'plant' },
   marketing: { name: 'Marketing', desc: 'Anúncios atraem mais hóspedes.', cost: (lvl) => 300 + lvl * 400, max: 3, icon: 'megaphone' },
   cleanfast: { name: 'Kit de Limpeza Pro', desc: 'Limpeza 40% mais rápida.', cost: () => 350, max: 1, icon: 'sparkle' },
+  tech:      { name: 'Técnico de Manutenção', desc: 'Conserta quartos quebrados sozinho. Salário $20/dia.', cost: () => 450, max: 2, icon: 'wrench' },
+  concierge: { name: 'Concierge', desc: 'Atende os pedidos dos hóspedes (toalha, comida, barulho). Salário $25/dia.', cost: () => 700, max: 1, icon: 'bell' },
+  generator: { name: 'Gerador', desc: 'Mantém a luz durante quedas de energia.', cost: () => 500, max: 1, icon: 'bolt' },
 };
 
 export const GUEST_TYPES = [

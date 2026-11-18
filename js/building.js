@@ -9,7 +9,7 @@ import {
 import { Tex, rep, shade, hex } from './textures.js';
 import { createPerson } from './characters.js';
 
-const W = BUILDING_W;
+let W = BUILDING_W; // atualizado ao montar cada hotel (largura varia por país)
 const WT = 0.14; // espessura das paredes
 
 // ---------- utilitários de geometria/material ----------
@@ -131,6 +131,9 @@ export const STATUS_STYLE = {
   occupied: { label: 'OCUPADO',  color: 0xe0434f, css: '#e0434f' },
   dirty:    { label: 'SUJO',     color: 0xe0802a, css: '#e0802a' },
   cleaning: { label: 'LIMPANDO', color: 0x2f8fe0, css: '#2f8fe0' },
+  request:  { label: 'PEDIDO!',  color: 0x8a4fd6, css: '#8a4fd6' },
+  broken:   { label: 'QUEBRADO', color: 0x6b6272, css: '#6b6272' },
+  repairing:{ label: 'CONSERTO', color: 0x2f8fe0, css: '#2f8fe0' },
 };
 class StatusSign {
   constructor(num, tier) {
@@ -161,7 +164,7 @@ class StatusSign {
     rr(g, 2, 2, W - 6, H - 12, 34); g.fill();
     g.fillStyle = st.css;
     rr(g, 8, 8, W - 18, H - 24, 28); g.fill();
-    if (status === 'cleaning') { // barra de progresso dentro da placa
+    if (status === 'cleaning' || status === 'repairing') { // barra de progresso dentro da placa
       g.fillStyle = 'rgba(255,255,255,0.35)';
       rr(g, 8, 8, Math.max(56, (W - 18) * progress), H - 24, 28); g.fill();
     }
@@ -588,41 +591,194 @@ function car(p, x, z, color) {
 }
 
 
-export function buildEnvironment(scene) {
+// ---------- elementos de cenário por país ----------
+function pine(p, x, z, s = 1, snowy = true) {
+  const t = new THREE.Group();
+  cyl(t, 0, 0, 0, 0.12, 0.16, 0.6, std(0x6b4423, 0.9), 8);
+  const green = std(0x2f6b4a, 0.85);
+  const white = std(0xffffff, 0.7);
+  for (let k = 0; k < 3; k++) {
+    const r = 0.9 - k * 0.25, y = 0.5 + k * 0.6;
+    const c = new THREE.Mesh(geoKey(`pine${k}`, () => new THREE.ConeGeometry(r, 1.0, 10)), green);
+    c.position.y = y + 0.5; c.castShadow = true; t.add(c);
+    if (snowy) {
+      const sc = new THREE.Mesh(geoKey(`pines${k}`, () => new THREE.ConeGeometry(r * 0.55, 0.45, 10)), white);
+      sc.position.y = y + 0.82; t.add(sc);
+    }
+  }
+  t.position.set(x, -0.3, z); t.scale.setScalar(s);
+  p.add(t);
+}
+function cherry(p, x, z, s = 1) {
+  const t = new THREE.Group();
+  cyl(t, 0, 0, 0, 0.12, 0.18, 1.3, std(0x5a3a2a, 0.9), 8);
+  const pinks = [std(0xf6b6cf, 0.8), std(0xf3a0c0, 0.8), std(0xfbd0e0, 0.8)];
+  [[0, 1.8, 0, 0.85], [0.55, 1.6, 0.2, 0.55], [-0.5, 1.6, -0.1, 0.6], [0.1, 2.3, 0.1, 0.55]].forEach(([x1, y, z1, r], k) => sphere(t, x1, y, z1, r, pinks[k % 3]));
+  t.position.set(x, -0.3, z); t.scale.setScalar(s);
+  p.add(t);
+}
+function lantern(p, x, z, list) {
+  cyl(p, x, -0.3, z, 0.05, 0.05, 2.0, std(0x3a3340, 0.6), 8);
+  const m = new THREE.MeshStandardMaterial({ color: 0xe0434f, emissive: 0x000000, roughness: 0.5 });
+  sphere(p, x, 1.9, z, 0.28, m, 1, 1.25, 1);
+  list.push(m);
+}
+function mountain(p, x, z, h, r, snowCap = true, color = 0x8a93a6) {
+  const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), std(color, 0.95, { flatShading: true }));
+  m.position.set(x, h / 2 - 0.3, z);
+  p.add(m);
+  if (snowCap) {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(r * 0.36, h * 0.36, 7), std(0xffffff, 0.8, { flatShading: true }));
+    c.position.set(x, h - h * 0.18 - 0.28, z);
+    p.add(c);
+  }
+}
+function tower(p, x, z, w, h, base, lit = 0.25, top = null) {
+  const tex = rep(Tex.windows(base, lit), Math.max(1, Math.round(w / 3)), Math.max(1, Math.round(h / 6)));
+  const m = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0 });
+  const b = box(p, x - w / 2, -0.3, z - w / 2, w, h, w, m, false);
+  if (top) rbox(p, x - w / 2 - 0.2, h - 0.3, z - w / 2 - 0.2, w + 0.4, 0.4, w + 0.4, top, 0.05);
+  return m;
+}
+// torre de treliça (lembra a torre de ferro de Paris)
+function latticeTower(p, x, z, s = 1) {
+  const t = new THREE.Group();
+  const m = new THREE.MeshBasicMaterial({ color: 0x7a5a3a, wireframe: true });
+  const parts = [[4.2, 2.2, 6, 0], [2.2, 1.0, 7, 6], [1.0, 0.25, 9, 13]];
+  for (const [rb, rt, h, y] of parts) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 4, 4, true), m);
+    c.rotation.y = Math.PI / 4; c.position.y = y + h / 2; t.add(c);
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(rt * 1.6, 0.25, rt * 1.6), std(0x7a5a3a, 0.8));
+    deck.position.y = y + h; t.add(deck);
+  }
+  const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.15, 3, 6), std(0x7a5a3a, 0.8));
+  spire.position.y = 23.5; t.add(spire);
+  t.position.set(x, -0.3, z); t.scale.setScalar(s);
+  p.add(t);
+}
+function dune(p, x, z, r) {
+  sphere(p, x, -0.3, z, r, std(0xe8cf98, 1), 1.6, 0.35, 1);
+}
+
+export function buildEnvironment(scene, level = null) {
+  W = BUILDING_W;
+  const sc = level?.scenery || 'beach';
   const g = new THREE.Group();
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 200), new THREE.MeshStandardMaterial({ map: rep(Tex.grass(), 60, 46), roughness: 1 }));
+  const groundTex = sc === 'alps' ? Tex.snow() : sc === 'desert' || sc === 'beach' ? Tex.sand() : Tex.grass();
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 220), new THREE.MeshStandardMaterial({ map: rep(groundTex, 70, 50), roughness: 1 }));
   ground.rotation.x = -Math.PI / 2; ground.position.set(W / 2, -0.32, 0); ground.receiveShadow = true;
   g.add(ground);
   // calçada, meio-fio, rua e calçada oposta
-  const sw = new THREE.MeshStandardMaterial({ map: rep(Tex.cobble(), 80, 1.5), roughness: 0.95 });
-  box(g, -100, -0.32, FRONT_Z, 240, 0.3, 3.4, sw, false);
-  box(g, -100, -0.32, FRONT_Z + 3.35, 240, 0.32, 0.14, std(0xe6e2da), false);
-  box(g, -100, -0.4, FRONT_Z + 3.5, 240, 0.3, 5.6, new THREE.MeshStandardMaterial({ map: rep(Tex.asphalt(), 60, 2), roughness: 1 }), false);
-  for (let x = -98; x < 140; x += 3) box(g, x, -0.09, FRONT_Z + 6.2, 1.6, 0.02, 0.16, std(0xffffff, 0.8), false);
-  box(g, -100, -0.32, FRONT_Z + 9.1, 240, 0.3, 2.4, sw, false);
-  // canteiros baixos ao lado da entrada
+  const swTex = sc === 'beach' ? Tex.wavePave() : Tex.cobble();
+  const sw = new THREE.MeshStandardMaterial({ map: rep(swTex, sc === 'beach' ? 150 : 80, sc === 'beach' ? 2.5 : 1.5), roughness: 0.95 });
+  box(g, -120, -0.32, FRONT_Z, 300, 0.3, 3.4, sw, false);
+  box(g, -120, -0.32, FRONT_Z + 3.35, 300, 0.32, 0.14, std(0xe6e2da), false);
+  box(g, -120, -0.4, FRONT_Z + 3.5, 300, 0.3, 5.6, new THREE.MeshStandardMaterial({ map: rep(Tex.asphalt(), 70, 2), roughness: 1, color: sc === 'alps' ? 0xd8dde6 : 0xffffff }), false);
+  for (let x = -118; x < 160; x += 3) box(g, x, -0.09, FRONT_Z + 6.2, 1.6, 0.02, 0.16, std(sc === 'city' ? 0xf0c020 : 0xffffff, 0.8), false);
+  box(g, -120, -0.32, FRONT_Z + 9.1, 300, 0.3, 2.4, sw, false);
+  // canteiros ao lado da entrada
+  const flowers = { beach: [0xef4b5c, 0xffd34d], city: [0xffffff, 0xd9473b], paris: [0xa267d6, 0xffffff], tokyo: [0xf6b6cf, 0xffffff], alps: [0xd9473b, 0xffffff], desert: [0xffd34d, 0xe58fb8] }[sc] || [0xef4b5c, 0xffffff];
   for (const x of [DOOR_X - 2.2, DOOR_X + 2.2]) {
     rbox(g, x - 0.7, -0.3, FRONT_Z + 0.25, 1.4, 0.55, 0.6, std(0xd9cfc0, 0.9), 0.06);
-    bush(g, x - 0.3, FRONT_Z + 0.55, 0.55, 0xef4b5c);
-    bush(g, x + 0.3, FRONT_Z + 0.55, 0.55, 0xffffff);
+    if (sc === 'alps') { sphere(g, x, 0.25, FRONT_Z + 0.55, 0.45, std(0xffffff, 0.8), 1.4, 0.5, 0.6); continue; }
+    bush(g, x - 0.3, FRONT_Z + 0.55, 0.55, flowers[0]);
+    bush(g, x + 0.3, FRONT_Z + 0.55, 0.55, flowers[1]);
   }
   bench(g, W - 3, FRONT_Z + 2.6, Math.PI);
-  // árvores e palmeiras nas laterais e atrás
-  for (const [x, z, s] of [[-3.5, -3, 1.4], [-6, 0.5, 1.1], [-9, -5, 1.5], [W + 3.5, -3, 1.3], [W + 6, 0.5, 1.2], [W + 9, -5, 1.6], [6, -9, 1.6], [16, -10, 1.8], [27, -9, 1.6]]) tree(g, x, z, s);
-  palm(g, -2.0, FRONT_Z + 0.9, 1.2);
-  palm(g, W + 2.0, FRONT_Z + 0.9, 1.3);
   const lamps = [];
-  for (let x = -14; x < W + 16; x += 8) lampPost(g, x, FRONT_Z + 10.1, lamps);
-  const cars = [car(g, -30, FRONT_Z + 5.0, 0xef4b5c), car(g, 40, FRONT_Z + 7.5, 0x4f9bd9)];
+  const glows = []; // janelas dos prédios ao fundo (acendem à noite)
+
+  if (sc === 'beach') {
+    // mar atrás do hotel, faixa de areia e morros arredondados no horizonte
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(300, 150), new THREE.MeshStandardMaterial({ map: rep(Tex.water(), 30, 15), color: 0x8fd6f0, roughness: 0.15, metalness: 0.1 }));
+    sea.rotation.x = -Math.PI / 2; sea.position.set(W / 2, -0.28, -88);
+    g.add(sea);
+    g.userData.water = sea.material.map;
+    for (const [x, z, r, h] of [[-25, -100, 9, 26], [-12, -110, 7, 16], [W + 25, -105, 10, 22], [W / 2 + 6, -120, 6, 12]]) {
+      const m = sphere(g, x, -0.3, z, r, std(0x3f8f4a, 0.9), 1, h / r, 1);
+      m.castShadow = false;
+    }
+    for (const [x, z, s] of [[-3.5, -3, 1.3], [-6.5, 0.5, 1.1], [-9, -6, 1.4], [W + 3.5, -3, 1.3], [W + 6.5, 0.5, 1.2], [W + 9, -6, 1.5], [5, -11, 1.3], [W - 6, -11, 1.4]]) palm(g, x, z, s);
+    // guarda-sóis na areia
+    for (const [x, z, c] of [[-14, -9, 0xef4b5c], [W + 14, -9, 0xffd34d], [-20, -14, 0x4f9bd9]]) {
+      cyl(g, x, -0.3, z, 0.04, 0.04, 1.8, 0xeeeeee);
+      const u = new THREE.Mesh(new THREE.ConeGeometry(0.9, 0.4, 10), std(c, 0.7));
+      u.position.set(x, 1.6, z); g.add(u);
+    }
+  } else if (sc === 'city') {
+    const bases = [0xb4bccb, 0xc2c9d6, 0xa9b2c2, 0xc9bdb0];
+    let k = 0;
+    for (let x = -50; x < W + 50; x += 7) {
+      const h = 6 + ((k * 37) % 9);
+      glows.push(tower(g, x, -34 - (k % 3) * 7, 5 + (k % 2), h, bases[k % 4], 0.3, std(0x8a90a0, 0.7)));
+      k++;
+    }
+    for (const [x, z] of [[-4, -2], [W + 4, -2], [-4, 2], [W + 4, 2]]) tree(g, x, z, 0.9);
+  } else if (sc === 'paris') {
+    for (let k = 0, x = -50; x < W + 50; k++, x += 9) {
+      const h = 4.5 + (k % 3) * 1.2;
+      const z = -30 - (k % 2) * 5;
+      const b = rbox(g, x - 4, -0.3, z - 3, 8, h, 6, std(0xf1e4c8, 0.9), 0.05);
+      b.castShadow = false;
+      const roof = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 4.2, 2.0, 4, 1), std(0x7a8696, 0.7));
+      roof.rotation.y = Math.PI / 4; roof.scale.set(1.35, 1, 0.95);
+      roof.position.set(x, h - 0.3 + 1.0, z);
+      g.add(roof);
+    }
+    latticeTower(g, W * 0.78, -60, 1.25);
+    for (const [x, z, s] of [[-3.5, -2, 1.2], [-7, 2, 1.0], [W + 3.5, -2, 1.2], [W + 7, 2, 1.0]]) tree(g, x, z, s);
+  } else if (sc === 'tokyo') {
+    mountain(g, W / 2 + 10, -150, 34, 44, true, 0x9aa6c4);
+    const neon = [0xe0434f, 0x2f8fe0, 0xf0b323, 0xa267d6];
+    let k = 0;
+    for (let x = -46; x < W + 46; x += 7) {
+      const h = 5 + ((k * 29) % 7);
+      glows.push(tower(g, x, -34 - (k % 2) * 6, 5, h, 0xbcc4d2, 0.35));
+      const sign = box(g, x - 0.5, h * 0.45, -31.4 - (k % 2) * 6, 1.0, h * 0.35, 0.2, new THREE.MeshStandardMaterial({ color: neon[k % 4], emissive: neon[k % 4], emissiveIntensity: 0.4 }), false);
+      glows.push(sign.material);
+      k++;
+    }
+    for (const [x, z, s] of [[-3.5, -2, 1.2], [-7, 1.5, 1.1], [-10, -6, 1.3], [W + 3.5, -2, 1.2], [W + 7, 1.5, 1.0], [W + 10, -6, 1.3]]) cherry(g, x, z, s);
+    for (let x = -12; x < W + 14; x += 7) lantern(g, x, FRONT_Z + 10.1, lamps);
+  } else if (sc === 'alps') {
+    for (const [x, z, h, r] of [[-34, -110, 30, 34], [W / 2 - 6, -140, 40, 42], [W + 34, -115, 32, 36], [W / 2 + 46, -160, 28, 34]]) mountain(g, x, z, h, r, true, 0xa9b6cc);
+    for (const [x, z, s] of [[-3.5, -3, 1.3], [-6.5, 0.5, 1.1], [-9.5, -6, 1.6], [-14, -2, 1.2], [W + 3.5, -3, 1.3], [W + 6.5, 0.5, 1.2], [W + 9.5, -6, 1.6], [W + 14, -2, 1.1], [6, -12, 1.5], [W - 8, -12, 1.4]]) pine(g, x, z, s);
+    // cerca de madeira
+    for (let x = -18; x < -2; x += 1.2) box(g, x, -0.3, -8, 0.1, 0.9, 0.1, 0x8a5530);
+    box(g, -18, 0.3, -8, 16, 0.08, 0.06, 0x8a5530);
+  } else if (sc === 'desert') {
+    for (const [x, z, r] of [[-30, -60, 18], [W + 30, -70, 22], [W / 2, -95, 26], [-60, -90, 24]]) dune(g, x, z, r);
+    // arranha-céu bem alto e afilado
+    const spire = new THREE.Group();
+    const glass = new THREE.MeshStandardMaterial({ color: 0x9fc6dc, roughness: 0.15, metalness: 0.6 });
+    [[5, 30], [3.6, 22], [2.4, 14], [1.4, 8]].reduce((y, [r, h]) => {
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r, h, 6), glass);
+      c.position.y = y + h / 2; spire.add(c);
+      return y + h;
+    }, 0);
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.5, 14, 6), glass);
+    tip.position.y = 81; spire.add(tip);
+    spire.position.set(W * 0.8, -0.3, -80);
+    g.add(spire);
+    for (let k = 0, x = -40; x < W + 10; k++, x += 9) glows.push(tower(g, x, -40 - (k % 2) * 6, 5, 6 + (k % 3) * 3, 0xccd6e0, 0.3));
+    for (const [x, z, s] of [[-3.5, -3, 1.4], [-6.5, 0.8, 1.2], [-10, -6, 1.5], [W + 3.5, -3, 1.4], [W + 6.5, 0.8, 1.2], [W + 10, -6, 1.5]]) palm(g, x, z, s);
+  }
+
+  if (sc !== 'tokyo') for (let x = -14; x < W + 16; x += 8) lampPost(g, x, FRONT_Z + 10.1, lamps);
+  const carColors = sc === 'city' ? [0xf6c90e, 0xf6c90e] : [0xef4b5c, 0x4f9bd9];
+  const cars = [car(g, -30, FRONT_Z + 5.0, carColors[0]), car(g, 40, FRONT_Z + 7.5, carColors[1])];
   cars[1].rotation.y = Math.PI;
   scene.add(g);
-  return { group: g, lamps, cars };
+  return { group: g, lamps, cars, glows, water: g.userData.water || null };
 }
 
 // =============== Classe principal ===============
 export class HotelView {
-  constructor(scene) {
+  constructor(scene, level = null) {
+    W = BUILDING_W;
     this.scene = scene;
+    this.level = level;
+    this.theme = level?.theme || { facade: 0xfff4e2, roof: 0xc96a4a, sign: 'HOTEL PARAÍSO', signBg: '#c96a4a', signFg: '#fff3c4' };
     this.root = new THREE.Group();
     scene.add(this.root);
     this.floorGroups = [];
@@ -685,23 +841,27 @@ export class HotelView {
     if (this.roof) this.root.remove(this.roof);
     const s = new THREE.Group();
     const H = n * FLOOR_H;
-    const side = texMat(Tex.facade(), (ROOM_D + FRONT_Z) / 3, n, 0xffffff, 0.9);
+    const th = this.theme;
+    const side = texMat(Tex.facade(), (ROOM_D + FRONT_Z) / 3, n, th.facade, 0.9);
     box(s, -0.45, -0.3, BACK_Z - 0.35, 0.45, H + 0.3, FRONT_Z - BACK_Z + 0.35, side);
     box(s, W, -0.3, BACK_Z - 0.35, 0.45, H + 0.3, FRONT_Z - BACK_Z + 0.35, side);
-    box(s, -0.45, -0.3, BACK_Z - 0.5, W + 0.9, H + 0.3, 0.2, std(0xf4efe6, 0.9), false);
+    box(s, -0.45, -0.3, BACK_Z - 0.5, W + 0.9, H + 0.3, 0.2, std(th.facade, 0.9), false);
     // colunas da frente
-    for (const x of [-0.5, W - 0.05]) rbox(s, x, -0.3, FRONT_Z - 0.25, 0.55, H + 0.3, 0.55, std(0xf6f1e6, 0.8), 0.05);
+    for (const x of [-0.5, W - 0.05]) rbox(s, x, -0.3, FRONT_Z - 0.25, 0.55, H + 0.3, 0.55, std(shade(th.facade, 1.02), 0.8), 0.05);
     // telhado
-    rbox(s, -0.7, H - 0.3, BACK_Z - 0.6, W + 1.4, 0.4, FRONT_Z - BACK_Z + 1.0, std(0xc96a4a, 0.8), 0.06);
+    rbox(s, -0.7, H - 0.3, BACK_Z - 0.6, W + 1.4, 0.4, FRONT_Z - BACK_Z + 1.0, std(th.roof, 0.8), 0.06);
+    if (this.level?.scenery === 'alps') { // neve no telhado
+      rbox(s, -0.6, H + 0.1, BACK_Z - 0.5, W + 1.2, 0.18, FRONT_Z - BACK_Z + 0.6, std(0xffffff, 0.8), 0.08);
+    }
     rbox(s, -0.7, H + 0.1, FRONT_Z + 0.1, W + 1.4, 0.35, 0.3, std(0xf6f1e6, 0.8), 0.05);
     rbox(s, W - 5, H + 0.1, -3.6, 1.8, 1.4, 1.8, std(0x9aa0a8, 0.6), 0.1);
     rbox(s, 3, H + 0.1, -3.2, 3.0, 0.5, 1.2, std(0xa0a6ac, 0.6), 0.05); // ar-condicionado
     // letreiro HOTEL
     const board = new THREE.Group();
-    rbox(board, -3.2, 0, -0.15, 6.4, 1.4, 0.3, std(0xc96a4a, 0.7), 0.12);
-    rbox(board, -3.0, 0.15, 0.1, 6.0, 1.1, 0.06, std(0xfff3c4, 0.7), 0.05);
+    rbox(board, -3.2, 0, -0.15, 6.4, 1.4, 0.3, std(new THREE.Color(th.signBg).getHex(), 0.7), 0.12);
+    rbox(board, -3.0, 0.15, 0.1, 6.0, 1.1, 0.06, std(new THREE.Color(th.signFg).getHex(), 0.7), 0.05);
     // placa plana (não sprite) para não atravessar o painel
-    const sp = textSprite('HOTEL PARAÍSO', { bg: '#fff3c4', fg: '#c96a4a', size: 1.0, w: 560, h: 96, font: 'bold 58px Fredoka, Nunito, sans-serif' });
+    const sp = textSprite(th.sign, { bg: th.signFg, fg: th.signBg, size: 1.0, w: 560, h: 96, font: `bold ${th.sign.length > 14 ? 50 : 58}px Fredoka, Nunito, sans-serif` });
     const t = new THREE.Mesh(new THREE.PlaneGeometry(sp.scale.x, sp.scale.y), new THREE.MeshBasicMaterial({ map: sp.material.map, transparent: true }));
     t.position.set(0, 0.72, 0.17);
     board.add(t);

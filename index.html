@@ -16,13 +16,14 @@
   <canvas id="game"></canvas>
   <div id="popups"></div>
 
+  <div id="game-ui" class="hidden">
   <header id="hud">
     <div class="hud-group">
       <div class="stat money" title="Dinheiro"><img class="ico" data-icon="coin" alt=""><span id="money">0</span></div>
-      <div class="stat" title="Dia e hora"><img class="ico" data-icon="bell" alt=""><span id="clock">Dia 1 07:00</span></div>
+      <div class="stat clock" title="Mês da temporada e hora"><img class="ico" data-icon="bell" alt=""><span class="clock-txt"><span id="clock">Jan · 07:00</span><span class="month"><span id="month">Mês 1/12</span><span class="mbar"><i id="month-bar"></i></span></span></span></div>
       <div class="stat" title="Avaliação do hotel"><span id="stars" class="stars"></span></div>
       <div class="stat small" title="Hóspedes atendidos"><img class="ico" data-icon="heart" alt=""><span id="guests">0</span></div>
-      <div class="stat rooms" title="Situação dos quartos"><span class="chip free" title="Livres"><b id="n-free">0</b> livres</span><span class="chip occ" title="Ocupados"><b id="n-occ">0</b> ocupados</span><span class="chip dirty" title="Sujos"><b id="n-dirty">0</b> sujos</span></div>
+      <div class="stat rooms" title="Situação dos quartos"><span class="chip free" title="Livres"><b id="n-free">0</b> livres</span><span class="chip occ" title="Ocupados"><b id="n-occ">0</b> ocupados</span><span class="chip dirty" title="Sujos ou quebrados"><b id="n-dirty">0</b> sujos</span></div>
     </div>
     <div class="hud-group">
       <div class="speed" id="speed">
@@ -33,13 +34,34 @@
       </div>
       <button id="btn-upgrades" class="btn primary">Melhorias</button>
       <button id="btn-sound" class="btn icon" title="Som">♪</button>
+      <button id="btn-map" class="btn" title="Voltar ao mapa (salva o jogo)">Mapa</button>
       <button id="btn-menu" class="btn icon" title="Menu">≡</button>
     </div>
   </header>
 
+  <section id="goals" aria-label="Metas da temporada"></section>
+  <div id="banner" class="hidden" role="status"></div>
   <aside id="panel" class="hidden"></aside>
   <div id="hint"></div>
   <div id="toasts"></div>
+  </div>
+
+  <div id="map" class="hidden">
+    <header class="map-head">
+      <div class="map-title"><h1>Rede Hotel Paraíso</h1><p>Administre um hotel por temporada e conquiste o mundo.</p></div>
+      <div class="map-stats">
+        <span class="stat" title="Estrelas conquistadas"><b class="gold">★</b> <span id="map-stars">0/18</span></span>
+        <span class="stat" title="Pontos para bônus da rede">Pontos <b id="map-points">0</b></span>
+        <button id="map-perks" class="btn">Bônus da rede</button>
+        <button id="map-daily" class="btn primary">Desafio do dia</button>
+        <button id="map-help" class="btn icon" title="Como jogar">?</button>
+      </div>
+    </header>
+    <div class="map-body">
+      <div class="map-wrap"><canvas id="map-canvas"></canvas><div id="map-pins"></div></div>
+      <aside id="map-card"></aside>
+    </div>
+  </div>
 
   <div id="modal" class="hidden">
     <div class="modal-box">
@@ -50,16 +72,18 @@
 
   <div id="intro" class="hidden">
     <div class="modal-box intro-box">
-      <h1>Hotel Paraíso</h1>
-      <p>Você é o gerente! Hóspedes chegam na <b>recepção</b> e esperam na fila.</p>
+      <h1>Como jogar</h1>
+      <p>Você é o gerente! Cada hotel dura uma <b>temporada de 12 meses</b>. Hóspedes chegam na <b>recepção</b> e esperam na fila.</p>
       <ol>
         <li><b>Clique num hóspede</b> da fila e depois num <b>quarto livre</b>.</li>
         <li>O balão mostra o <b>tipo de quarto</b> que ele quer (cor) e as <b>diárias</b> (bolinhas).</li>
         <li>Quando ele sai, você recebe e o quarto fica <b>sujo</b>: clique nele para <b>limpar</b>.</li>
         <li>Use o dinheiro para <b>construir</b> quartos, lanchonete, academia, piscina e novos andares!</li>
+        <li>Placa <b>roxa</b> = pedido do hóspede: clique para atender. Placa <b>cinza</b> = quarto quebrado: conserte.</li>
+        <li>Cumpra as <b>3 metas</b> da temporada para ganhar estrelas e liberar o próximo país.</li>
       </ol>
       <p class="muted">Arraste para mover a câmera, roda do mouse ou pinça para zoom, Q/E para girar e F para ver o prédio inteiro.</p>
-      <button id="intro-start" class="btn primary big">Abrir o hotel</button>
+      <button id="intro-start" class="btn primary big">Entendi!</button>
     </div>
   </div>
 

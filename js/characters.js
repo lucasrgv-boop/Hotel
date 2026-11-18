@@ -88,7 +88,14 @@ export function createPerson(opts = {}) {
   } else if (opts.hat === 'cap') {
     const c = mesh(geo.cap, mat(opts.hatColor ?? 0xd9473b)); c.position.y = 0.04; head.add(c);
     const v = mesh(geo.visor, mat(opts.hatColor ?? 0xd9473b)); v.position.set(0, 0.12, 0.22); v.rotation.y = -Math.PI / 2; head.add(v);
-  } else if (opts.hat) {
+  } else if (opts.hat === 'beanie') { // gorro de lã com pompom
+    const c = mesh(geo.cap, mat(opts.hatColor ?? 0xd9473b, 0.95)); c.scale.set(1.02, 1.25, 1.02); c.position.y = 0.02; head.add(c);
+    const pom = mesh(geo.bun, mat(0xffffff, 0.95)); pom.scale.setScalar(0.75); pom.position.y = 0.4; head.add(pom);
+  } else if (opts.hat === 'beret') { // boina
+    const c = mesh(geo.brim, mat(opts.hatColor ?? 0x2a2a30, 0.9)); c.scale.set(0.8, 2.2, 0.8); c.position.set(0.04, 0.28, -0.02); c.rotation.z = -0.2; head.add(c);
+  } else if (opts.hat === 'shades') { // óculos escuros
+    const g = mesh(new THREE.BoxGeometry(0.42, 0.1, 0.04), mat(0x1d1a22, 0.2), false); g.position.set(0, 0.03, 0.29); head.add(g);
+  } else if (opts.hat && opts.hat !== 'none') {
     const b = mesh(geo.brim, mat(opts.hatColor ?? 0xf3e2a0)); b.position.y = 0.2; head.add(b);
     const c = mesh(geo.crown, mat(opts.hatColor ?? 0xf3e2a0)); c.position.y = 0.32; head.add(c);
     const band = mesh(new THREE.CylinderGeometry(0.305, 0.305, 0.05, 20), mat(0xd9473b)); band.position.y = 0.25; head.add(band);
@@ -148,9 +155,9 @@ export class Bubble {
     this.key = '';
   }
   // icon: nome; fill: paciência 0..1; tint: cor do ícone; border: cor da borda; dots: diárias
-  set(icon, fill = 1, tint = null, border = '#ffffff', dots = 0, ringColor = null) {
+  set(icon, fill = 1, tint = null, border = '#ffffff', dots = 0, ringColor = null, badge = null) {
     const fq = Math.round(fill * 30);
-    const key = `${icon}|${fq}|${tint}|${border}|${dots}|${ringColor}`;
+    const key = `${icon}|${fq}|${tint}|${border}|${dots}|${ringColor}|${badge}`;
     if (key === this.key) return;
     this.key = key;
     const g = this.canvas.getContext('2d');
@@ -179,6 +186,15 @@ export class Bubble {
       g.fillStyle = '#3a3340';
       const w = (dots - 1) * 13;
       for (let k = 0; k < dots; k++) { g.beginPath(); g.arc(cx - w / 2 + k * 13, cy + 26, 4.5, 0, Math.PI * 2); g.fill(); }
+    }
+    if (badge) { // selo de exigência (T = térreo, ↑ = andar alto, ? = inspetor, ★ = celebridade)
+      g.fillStyle = badge === '?' || badge === '★' ? '#d4a93a' : '#8a4fd6';
+      g.beginPath(); g.arc(cx + 34, cy - 30, 17, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#ffffff'; g.lineWidth = 4; g.stroke();
+      g.fillStyle = '#ffffff';
+      g.font = 'bold 22px Fredoka, Nunito, sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(badge, cx + 34, cy - 28);
     }
     this.tex.needsUpdate = true;
   }

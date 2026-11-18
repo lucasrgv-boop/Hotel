@@ -1,31 +1,35 @@
-// Interface HTML: HUD, painel de informações, modais, toasts e popups.
+// Interface HTML do hotel: HUD, metas, eventos, painel de informações, modais, toasts e popups.
 import { TIERS, BUILDABLES, UPGRADES } from './config.js';
 import { iconDataURL } from './textures.js';
 import { Sfx, isMuted, setMuted } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const tierHex = (t) => '#' + TIERS[t].color.toString(16).padStart(6, '0');
+const money = (v) => `$${Math.round(v).toLocaleString('pt-BR')}`;
 
-const STATUS_PT = { clean: 'Livre', occupied: 'Ocupado', dirty: 'Sujo', cleaning: 'Limpando' };
+const STATUS_PT = { clean: 'Livre', occupied: 'Ocupado', dirty: 'Sujo', cleaning: 'Limpando', broken: 'Quebrado', repairing: 'Em conserto' };
+const TRAIT_PT = { ground: 'Idoso: quer ficar no térreo', high: 'Quer vista: andar alto' };
+const ICONS = ['bed', 'burger', 'dumbbell', 'wave', 'broom', 'star', 'heart', 'coin', 'building', 'bell', 'plant', 'megaphone',
+  'sparkle', 'dirty', 'towel', 'noise', 'wrench', 'magnifier', 'sun', 'bolt', 'party', 'angry', 'lock', 'plane'];
 
 export class UI {
   constructor() {
     this.game = null;
     this.camera = null;
-    this.panelTarget = null; // {kind:'slot', f, i}
+    this.panelTarget = null;
     this.dirty = true;
     this.lastHud = '';
     this.icons = {};
-    for (const n of ['bed', 'burger', 'dumbbell', 'wave', 'broom', 'star', 'heart', 'coin', 'building', 'bell', 'plant', 'megaphone', 'sparkle', 'dirty']) this.icons[n] = iconDataURL(n, 96);
-    this.floorsDirty = true;
+    for (const n of ICONS) this.icons[n] = iconDataURL(n, 96);
     document.querySelectorAll('img[data-icon]').forEach((img) => { img.src = this.icons[img.dataset.icon]; });
-    this.lastFloorsKey = '';
 
     $('modal-close').onclick = () => this.closeModal();
-    $('modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal') this.closeModal(); });
+    $('modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal' && !this.modalLocked) this.closeModal(); });
     $('btn-upgrades').onclick = () => { Sfx.click(); this.openUpgrades(); };
     $('btn-menu').onclick = () => { Sfx.click(); this.openMenu(); };
+    $('btn-map').onclick = () => { Sfx.click(); this.nav?.toMap(); };
     $('btn-sound').onclick = () => { setMuted(!isMuted()); this.syncSound(); Sfx.click(); };
+    $('banner').onclick = () => $('banner').classList.add('hidden');
     this.syncSound();
     document.querySelectorAll('#speed button').forEach((b) => {
       b.onclick = () => { this.setSpeed(+b.dataset.speed); Sfx.click(); };
@@ -36,7 +40,10 @@ export class UI {
     this.game = game;
     this.camera = camera;
     this.nav = nav;
-    this.setSpeed(game.speed);
+    this.panelTarget = null;
+    this.lastHud = ''; this.lastRooms = ''; this.lastGoals = '';
+    this.setSpeed(1);
+    this.changed();
   }
 
   syncSound() { $('btn-sound').classList.toggle('off', isMuted()); }
@@ -47,7 +54,7 @@ export class UI {
     document.querySelectorAll('#speed button').forEach((b) => b.classList.toggle('on', +b.dataset.speed === s));
   }
 
-  // ---------- Toasts & popups ----------
+  // ---------- Toasts, popups, avisos ----------
   toast(msg, kind = 'info') {
     const el = document.createElement('div');
     el.className = `toast ${kind}`;
@@ -58,6 +65,15 @@ export class UI {
     const all = $('toasts').children;
     while (all.length > 3) all[all.length - 1].remove();
     setTimeout(() => el.remove(), (life + 0.5) * 1000);
+  }
+
+  // aviso grande no topo para eventos (inspetor, quebra, festival...)
+  event({ icon, title, text, kind = 'info' }) {
+    const b = $('banner');
+    b.className = `banner ${kind}`;
+    b.innerHTML = `<img src="${this.icons[icon] || this.icons.bell}" alt=""><div><b>${title}</b><span>${text}</span></div>`;
+    clearTimeout(this.bannerTimer);
+    this.bannerTimer = setTimeout(() => b.classList.add('hidden'), 7000);
   }
 
   popup(worldPos, text, color = '#ffe680') {
@@ -82,6 +98,7 @@ export class UI {
   // ---------- HUD ----------
   updateHUD() {
     const g = this.game;
+    if (!g) return;
     const st = g.state;
     const h = g.hour;
     const hh = String(Math.floor(h)).padStart(2, '0');
@@ -93,8 +110,10 @@ export class UI {
     if (key !== this.lastHud) {
       this.lastHud = key;
       $('money').textContent = st.money.toLocaleString('pt-BR');
-      $('money').style.color = st.money < 0 ? '#ff8a80' : '';
-      $('clock').textContent = `Dia ${g.day} ${hh}:${mm}`;
+      $('money').style.color = st.money < 0 ? '#e0434f' : '';
+      $('clock').textContent = `${g.monthName} · ${hh}:${mm}`;
+      $('month').textContent = `Mês ${Math.min(g.day, g.seasonMonths)}/${g.seasonMonths}`;
+      $('month-bar').style.width = `${Math.min(100, ((st.time - 7) / (g.seasonMonths * 24 - 7)) * 100)}%`;
       $('stars').innerHTML = stars;
       $('stars').parentElement.title = `Avaliação: ${st.rating.toFixed(2)} / 5`;
       $('guests').textContent = st.stats.guests;
@@ -112,38 +131,31 @@ export class UI {
       $('n-free').parentElement.classList.toggle('zero', !free);
       $('n-dirty').parentElement.classList.toggle('zero', !dirty);
     }
+    this.renderGoals();
     if (this.dirty) { this.dirty = false; this.renderPanel(); }
-    this.renderFloors();
+  }
+
+  renderGoals() {
+    const g = this.game;
+    const goals = g.goalStatus();
+    const s = g.state.stats;
+    const fest = g.festivalActive();
+    const ev = g.state.event?.active ? g.state.event.type : '';
+    const key = goals.map((x) => `${x.done}${x.text}`).join('|') + `|${g.score()}|${s.combo}|${fest?.name}|${ev}|${g.blackout}`;
+    if (key === this.lastGoals) return;
+    this.lastGoals = key;
+    const chips = [];
+    if (fest) chips.push(`<span class="gchip fest"><img src="${this.icons.party}" alt="">${fest.name}</span>`);
+    if (g.blackout) chips.push(`<span class="gchip bad"><img src="${this.icons.bolt}" alt="">Sem energia</span>`);
+    if (g.heatwave) chips.push(`<span class="gchip warn"><img src="${this.icons.sun}" alt="">Onda de calor</span>`);
+    if (s.combo >= 2) chips.push(`<span class="gchip combo">Combo x${s.combo}</span>`);
+    $('goals').innerHTML = `
+      <div class="g-head"><b>${g.daily ? 'Desafio do dia' : g.level.name}</b><span class="g-score" title="Pontuação">${g.score().toLocaleString('pt-BR')} pts</span></div>
+      ${goals.map((x) => `<div class="g-row ${x.done ? 'done' : ''}"><span class="g-star">${x.done ? '★' : '☆'}</span><span class="g-label">${x.label}</span><span class="g-val">${x.text}</span></div>`).join('')}
+      ${chips.length ? `<div class="g-chips">${chips.join('')}</div>` : ''}`;
   }
 
   changed() { this.dirty = true; }
-
-  // ---------- Abas de andares ----------
-  renderFloors() {
-    if (!$('floors')) return;
-    const g = this.game;
-    const vf = g.view.viewFloor;
-    const parts = [];
-    for (let f = g.state.floors - 1; f >= 0; f--) {
-      const s = g.floorStatus(f);
-      parts.push(`${f}:${s.free}:${s.dirty}:${s.busy}`);
-    }
-    const key = `${vf}|${parts.join(',')}`;
-    if (key === this.lastFloorsKey) return;
-    this.lastFloorsKey = key;
-    const el = $('floors');
-    el.innerHTML = '';
-    for (let f = g.state.floors - 1; f >= 0; f--) {
-      const s = g.floorStatus(f);
-      const b = document.createElement('button');
-      b.className = 'floor-btn' + (f === vf ? ' on' : '');
-      b.title = f === 0 ? 'Térreo' : `${f}º andar`;
-      b.innerHTML = `<span class="fl">${f === 0 ? 'T' : f + 'º'}</span>
-        <span class="badges">${s.free ? `<i class="b-free" title="Quartos livres">${s.free}</i>` : ''}${s.dirty ? `<i class="b-dirty" title="Quartos sujos">${s.dirty}</i>` : ''}</span>`;
-      b.onclick = () => { Sfx.click(); this.nav.setViewFloor(f); };
-      el.appendChild(b);
-    }
-  }
 
   // ---------- Painel ----------
   showSlot(f, i) { this.panelTarget = { kind: 'slot', f, i }; this.renderPanel(); }
@@ -152,17 +164,22 @@ export class UI {
   renderPanel() {
     const p = $('panel');
     const g = this.game;
+    if (!g) return;
     if (g.selected) {
       const gu = g.selected;
       p.classList.remove('hidden');
+      const price = TIERS[gu.want].price * (gu.want === 2 ? (g.mods.suiteMult || 1) : 1);
       p.innerHTML = `
-        <h3>${gu.type.name} <span class="tag" style="background:${tierHex(gu.want)}">${TIERS[gu.want].name}</span></h3>
+        <h3>${gu.name} <span class="tag" style="background:${tierHex(gu.want)}">${TIERS[gu.want].name}</span></h3>
         <div class="row"><span class="muted">Quer quarto</span><span style="color:${tierHex(gu.want)}">${TIERS[gu.want].name}</span></div>
         <div class="row"><span class="muted">Diárias</span><span>${gu.nights}</span></div>
-        <div class="row"><span class="muted">Paga até</span><span>$${TIERS[gu.want].price * gu.nights}</span></div>
+        <div class="row"><span class="muted">Paga até</span><span>${money(price * gu.nights)}</span></div>
         <div class="row"><span class="muted">Paciência</span><span>${Math.round((gu.patience / gu.maxPatience) * 100)}%</span></div>
-        <p class="muted" style="margin:8px 0 0">Clique num quarto <b style="color:#9fe870">livre</b> para alocar. Quarto pior que o desejado = hóspede insatisfeito.</p>
-        <div class="actions"><button class="btn" id="p-auto">ALOCAR NO MELHOR QUARTO</button></div>`;
+        ${gu.trait ? `<div class="row"><span class="muted">Exigência</span><span>${TRAIT_PT[gu.trait]}</span></div>` : ''}
+        ${gu.inspector ? '<p class="note gold">Inspetor disfarçado! Se sair feliz, a avaliação sobe muito.</p>' : ''}
+        ${gu.celebrity ? '<p class="note gold">Celebridade! Quer uma Suíte e tem pouca paciência.</p>' : ''}
+        <p class="muted" style="margin:8px 0 0">Clique num quarto <b style="color:#2fb350">LIVRE</b> para alocar. Quarto pior que o desejado = hóspede insatisfeito.</p>
+        <div class="actions"><button class="btn" id="p-auto">Alocar no melhor quarto</button></div>`;
       $('p-auto').onclick = () => {
         const r = g.bestRoomFor(gu);
         if (r) g.assign(gu, r.f, r.i); else { Sfx.error(); this.toast('Nenhum quarto livre e limpo!', 'warn'); }
@@ -175,29 +192,36 @@ export class UI {
     if (!sl || sl.type === 'empty' || sl.type === 'lobby') { p.classList.add('hidden'); return; }
     p.classList.remove('hidden');
     if (sl.type === 'room') {
-      const num = (t.f + 1) * 100 + t.i + 1;
+      const num = g.roomNumber(t.f, t.i);
       const next = TIERS[sl.tier + 1];
       const guest = sl.guest;
       let gInfo = '';
       if (guest) {
         const left = Math.max(0, guest.stayLeft);
-        gInfo = `<div class="row"><span class="muted">Hóspede</span><span>${guest.type.name}</span></div>
-          <div class="row"><span class="muted">Sai em</span><span>${guest.state === 'toRoom' && !guest.stayLeft ? '—' : `${left.toFixed(1)}h`}</span></div>`;
+        gInfo = `<div class="row"><span class="muted">Hóspede</span><span>${guest.name}</span></div>
+          <div class="row"><span class="muted">Sai em</span><span>${guest.state === 'toRoom' && !guest.stayLeft ? '—' : `${left.toFixed(1)}h`}</span></div>
+          ${guest.request ? `<div class="row"><span class="muted">Pedido</span><span style="color:#8a4fd6">${guest.request.name}</span></div>` : ''}`;
       }
+      const price = TIERS[sl.tier].price * (sl.tier === 2 ? (g.mods.suiteMult || 1) : 1);
+      const upCost = next ? g.roomUpgradeCost(sl.tier + 1) : 0;
       p.innerHTML = `
         <h3>Quarto ${num} <span class="tag" style="background:${tierHex(sl.tier)}">${TIERS[sl.tier].name}</span></h3>
         <div class="row"><span class="muted">Estado</span><span>${STATUS_PT[sl.status]}</span></div>
-        <div class="row"><span class="muted">Diária</span><span>$${TIERS[sl.tier].price}</span></div>
+        <div class="row"><span class="muted">Diária</span><span>${money(price)}</span></div>
         ${gInfo}
-        ${sl.status === 'cleaning' ? `<div class="row"><span class="muted">Limpeza</span><span>${Math.round((sl.cleanP || 0) * 100)}%</span></div>` : ''}
+        ${sl.status === 'cleaning' || sl.status === 'repairing' ? `<div class="row"><span class="muted">Progresso</span><span>${Math.round((sl.workP || 0) * 100)}%</span></div>` : ''}
         <div class="actions">
-          ${sl.status === 'dirty' ? '<button class="btn good" id="p-clean">LIMPAR</button>' : ''}
-          ${next ? `<button class="btn" id="p-up">REFORMAR P/ ${next.name.toUpperCase()} ($${next.upgrade})</button>` : '<span class="muted">Nível máximo!</span>'}
-          <button class="btn danger" id="p-demo">DEMOLIR</button>
+          ${guest?.request ? '<button class="btn primary" id="p-req">Atender pedido</button>' : ''}
+          ${sl.status === 'dirty' ? '<button class="btn good" id="p-clean">Limpar</button>' : ''}
+          ${sl.status === 'broken' ? '<button class="btn good" id="p-fix">Consertar ($40)</button>' : ''}
+          ${next ? `<button class="btn" id="p-up">Reformar para ${next.name} (${money(upCost)})</button>` : '<span class="muted">Nível máximo!</span>'}
+          <button class="btn danger" id="p-demo">Demolir</button>
         </div>`;
-      if ($('p-clean')) $('p-clean').onclick = () => g.startManualClean(t.f, t.i);
+      if ($('p-req')) $('p-req').onclick = () => { g.fulfillRequest(t.f, t.i); this.changed(); };
+      if ($('p-clean')) $('p-clean').onclick = () => g.startManualJob(t.f, t.i);
+      if ($('p-fix')) $('p-fix').onclick = () => g.startManualJob(t.f, t.i);
       if ($('p-up')) {
-        $('p-up').disabled = g.state.money < next.upgrade;
+        $('p-up').disabled = g.state.money < upCost;
         $('p-up').onclick = () => { g.upgradeRoom(t.f, t.i); this.changed(); };
       }
       $('p-demo').onclick = () => this.confirmDemolish(t.f, t.i);
@@ -205,11 +229,11 @@ export class UI {
       const b = BUILDABLES[sl.type];
       const using = g.guests.filter((x) => x.facility && x.facility.f === t.f && x.facility.i === t.i && x.state === 'atFacility').length;
       p.innerHTML = `
-        <h3>${b.name}</h3>
+        <h3>${g.facilityName(sl.type)}</h3>
         <p class="muted" style="margin:0 0 6px">${b.desc}</p>
         <div class="row"><span class="muted">Gasto por visita</span><span>$${b.spend[0]}–${b.spend[1]}</span></div>
         <div class="row"><span class="muted">Usando agora</span><span>${using}</span></div>
-        <div class="actions"><button class="btn danger" id="p-demo">DEMOLIR</button></div>`;
+        <div class="actions"><button class="btn danger" id="p-demo">Demolir</button></div>`;
       $('p-demo').onclick = () => this.confirmDemolish(t.f, t.i);
     }
   }
@@ -217,40 +241,41 @@ export class UI {
   confirmDemolish(f, i) {
     this.openModal('Demolir?', `
       <p style="line-height:1.8">Tem certeza? O espaço volta a ficar vazio e o dinheiro <b>não</b> é devolvido.</p>
-      <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="d-no">CANCELAR</button><button class="btn danger" id="d-yes">DEMOLIR</button></div>`);
+      <div class="modal-actions"><button class="btn" id="d-no">Cancelar</button><button class="btn danger" id="d-yes">Demolir</button></div>`);
     $('d-no').onclick = () => this.closeModal();
     $('d-yes').onclick = () => { this.game.demolish(f, i); this.closeModal(); this.hidePanel(); };
   }
 
   // ---------- Modais ----------
-  openModal(title, html) {
+  openModal(title, html, locked = false) {
     $('modal-title').textContent = title;
     $('modal-body').innerHTML = html;
     $('modal').classList.remove('hidden');
+    $('modal-close').classList.toggle('hidden', locked);
     this.modalOpen = true;
+    this.modalLocked = locked;
   }
   closeModal() {
     $('modal').classList.add('hidden');
     this.modalOpen = false;
+    this.modalLocked = false;
     this.modalRefresh = null;
   }
 
   openBuild(f, i) {
     const g = this.game;
-    const render = () => {
-      const cards = Object.entries(BUILDABLES).map(([k, b]) => {
-        const cost = g.buildCost(k);
-        return `<div class="card"><img src="${this.icons[b.icon]}" alt="">
-          <div class="body"><span class="name">${b.name}</span><span class="desc">${b.desc}${k === 'room' ? ` Diária $${TIERS[0].price}.` : ''}</span>
-          <button class="btn good" data-build="${k}" ${g.state.money < cost ? 'disabled' : ''}>CONSTRUIR $${cost}</button></div></div>`;
-      }).join('');
-      this.openModal(`Construir no ${f === 0 ? 'térreo' : `${f}º andar`}`, `<div class="cards">${cards}</div>`);
-      document.querySelectorAll('[data-build]').forEach((b) => {
-        b.onclick = () => { if (g.build(f, i, b.dataset.build)) { this.closeModal(); this.showSlot(f, i); } };
-      });
-    };
-    render();
-    this.modalRefresh = render;
+    const cards = Object.entries(BUILDABLES).map(([k, b]) => {
+      const cost = g.buildCost(k);
+      const name = k === 'room' ? b.name : g.facilityName(k);
+      return `<div class="card"><img src="${this.icons[b.icon]}" alt="">
+        <div class="body"><span class="name">${name}</span><span class="desc">${b.desc}${k === 'room' ? ` Diária $${TIERS[0].price}.` : ''}</span>
+        <button class="btn good" data-build="${k}" data-cost="${cost}" ${g.state.money < cost ? 'disabled' : ''}>Construir ${money(cost)}</button></div></div>`;
+    }).join('');
+    this.openModal(`Construir no ${f === 0 ? 'térreo' : `${f}º andar`}`, `<div class="cards">${cards}</div>`);
+    this.modalRefresh = true;
+    document.querySelectorAll('[data-build]').forEach((b) => {
+      b.onclick = () => { if (g.build(f, i, b.dataset.build)) { this.closeModal(); this.showSlot(f, i); } };
+    });
   }
 
   openUpgrades() {
@@ -258,57 +283,90 @@ export class UI {
     const render = () => {
       const cards = Object.entries(UPGRADES).map(([k, u]) => {
         const lvl = g.state.upgrades[k];
-        const maxed = lvl >= u.max;
-        const cost = u.cost(lvl);
+        const max = g.upgradeMax(k);
+        const maxed = lvl >= max;
+        const cost = g.upgradeCost(k);
         return `<div class="card"><img src="${this.icons[u.icon]}" alt="">
           <div class="body"><span class="name">${u.name}</span><span class="desc">${u.desc}</span>
-          <span class="lvl">${u.max > 1 ? `Nível ${lvl}/${u.max}` : (lvl ? 'Adquirido' : '')}</span>
-          ${maxed ? '<span class="muted">MÁXIMO</span>' : `<button class="btn good" data-up="${k}" ${g.state.money < cost ? 'disabled' : ''}>COMPRAR $${cost}</button>`}</div></div>`;
+          <span class="lvl">${max > 1 ? `Nível ${lvl}/${max}` : (lvl ? 'Adquirido' : '')}</span>
+          ${maxed ? '<span class="muted">Máximo</span>' : `<button class="btn good" data-up="${k}" data-cost="${cost}" ${g.state.money < cost ? 'disabled' : ''}>Comprar ${money(cost)}</button>`}</div></div>`;
       }).join('');
       const st = g.state;
-      const info = `<p class="muted" style="line-height:1.8;margin:0 0 10px">Quartos: ${g.rooms().length} · Andares: ${st.floors} · Salários: $${g.salaries()}/dia · Chegadas: ~${(g.arrivalRatePerHour() * 24).toFixed(0)}/dia</p>`;
+      const info = `<p class="muted" style="line-height:1.8;margin:0 0 10px">Quartos: ${g.rooms().length} · Andares: ${st.floors}/${g.maxFloors()} · Salários: $${g.salaries()}/mês · Chegadas: ~${(g.arrivalRatePerHour() * 24).toFixed(0)}/mês</p>`;
       this.openModal('Melhorias do Hotel', info + `<div class="cards">${cards}</div>`);
+      this.modalRefresh = true;
       document.querySelectorAll('[data-up]').forEach((b) => {
         b.onclick = () => { if (g.buyUpgrade(b.dataset.up)) render(); };
       });
     };
     render();
-    this.modalRefresh = render;
   }
 
   openMenu() {
     const g = this.game;
     const st = g.state;
-    this.openModal('Menu', `
-      <div style="line-height:2">
-        <div class="row" style="display:flex;justify-content:space-between"><span class="muted">Hóspedes atendidos</span><span>${st.stats.guests}</span></div>
-        <div class="row" style="display:flex;justify-content:space-between"><span class="muted">Foram embora irritados</span><span>${st.stats.angry}</span></div>
-        <div class="row" style="display:flex;justify-content:space-between"><span class="muted">Total ganho</span><span>$${st.stats.earned}</span></div>
-        <div class="row" style="display:flex;justify-content:space-between"><span class="muted">Melhor dia</span><span>$${st.stats.best}</span></div>
-        <div class="row" style="display:flex;justify-content:space-between"><span class="muted">Avaliação</span><span>${st.rating.toFixed(2)} ★</span></div>
-      </div>
-      <p class="muted" style="line-height:1.8">Atalhos: Espaço = pausar · 1/2/3 = velocidade · U = melhorias · Q/E = girar · Esc = cancelar. O jogo salva automaticamente.</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="btn" id="m-help">COMO JOGAR</button>
-        <button class="btn danger" id="m-new">NOVO JOGO</button>
+    const rows = [
+      ['Hóspedes atendidos', st.stats.guests], ['Foram embora irritados', st.stats.angry], ['Total ganho', money(st.stats.earned)],
+      ['Pedidos atendidos', st.stats.requests], ['Maior combo', `x${st.stats.bestCombo}`], ['Avaliação', `${st.rating.toFixed(2)} ★`],
+    ];
+    this.openModal(g.daily ? 'Desafio do dia' : g.level.name, `
+      <div class="stats">${rows.map(([a, b]) => `<div class="row"><span class="muted">${a}</span><span>${b}</span></div>`).join('')}</div>
+      <p class="muted" style="line-height:1.7">Atalhos: Espaço = pausar · 1/2/3 = velocidade · U = melhorias · F = ver o prédio inteiro · Q/E = girar · Esc = cancelar. O jogo salva sozinho.</p>
+      <div class="modal-actions">
+        <button class="btn" id="m-help">Como jogar</button>
+        <button class="btn danger" id="m-new">Recomeçar temporada</button>
+        <button class="btn primary" id="m-map">Voltar ao mapa</button>
       </div>`);
     $('m-help').onclick = () => { this.closeModal(); $('intro').classList.remove('hidden'); };
+    $('m-map').onclick = () => { this.closeModal(); this.nav.toMap(); };
     $('m-new').onclick = () => {
-      this.openModal('Novo jogo?', `<p style="line-height:1.8">Todo o progresso será perdido.</p>
-        <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="n-no">CANCELAR</button><button class="btn danger" id="n-yes">RECOMEÇAR</button></div>`);
+      this.openModal('Recomeçar a temporada?', `<p style="line-height:1.8">O progresso desta temporada será perdido. As estrelas já conquistadas continuam.</p>
+        <div class="modal-actions"><button class="btn" id="n-no">Cancelar</button><button class="btn danger" id="n-yes">Recomeçar</button></div>`);
       $('n-no').onclick = () => this.closeModal();
-      $('n-yes').onclick = () => { g.reset(); this.closeModal(); this.hidePanel(); this.toast('Novo hotel aberto. Boa sorte!', 'good'); };
+      $('n-yes').onclick = () => { this.closeModal(); this.nav.restart(); };
     };
   }
 
-  // atualiza modal aberto quando o dinheiro muda (habilita botões)
-  refreshModal() {
-    if (this.modalOpen && this.modalRefresh) {
-      document.querySelectorAll('[data-build],[data-up]').forEach((b) => {
-        const m = b.textContent.match(/\$(\d+)/);
-        if (m) b.disabled = this.game.state.money < +m[1];
-      });
+  // fim da temporada
+  openResults(res, info) {
+    const { level, goals, score, stats } = res;
+    const starsHtml = res.stars.map((on, k) => `<span class="big-star ${on ? 'on' : ''}" style="animation-delay:${0.2 + k * 0.25}s">★</span>`).join('');
+    const rows = [
+      ['Dinheiro ganho', money(stats.earned)], ['Hóspedes atendidos', stats.guests], ['Avaliação final', `${res.rating.toFixed(2)} ★`],
+      ['Maior combo', `x${stats.bestCombo}`], ['Pedidos atendidos', stats.requests], ['Irritados', stats.angry],
+    ];
+    const extra = res.daily
+      ? `<div class="daily-board" id="daily-board"><p class="muted">Carregando placar...</p></div>`
+      : `<p class="result-note">${info.newStars > 0 ? `+${info.newStars} estrela(s) para a rede! Use-as em bônus permanentes no mapa.` : 'Nenhuma estrela nova desta vez.'}${info.record ? ' <b>Novo recorde!</b>' : ''}</p>`;
+    this.openModal(res.daily ? 'Fim do desafio do dia' : `Fim da temporada · ${level.name}`, `
+      <div class="results">
+        ${res.daily ? '' : `<div class="stars-row">${starsHtml}</div>`}
+        <div class="final-score"><span>Pontuação</span><b>${score.toLocaleString('pt-BR')}</b></div>
+        <div class="goal-list">${goals.map((x) => `<div class="g-row ${x.done ? 'done' : ''}"><span class="g-star">${x.done ? '★' : '☆'}</span><span class="g-label">${x.label}</span><span class="g-val">${x.text}</span></div>`).join('')}</div>
+        <div class="stats">${rows.map(([a, b]) => `<div class="row"><span class="muted">${a}</span><span>${b}</span></div>`).join('')}</div>
+        ${extra}
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="r-again">Jogar de novo</button>
+        <button class="btn primary" id="r-map">Voltar ao mapa</button>
+      </div>`, true);
+    $('r-again').onclick = () => { this.closeModal(); this.nav.restart(); };
+    $('r-map').onclick = () => { this.closeModal(); this.nav.toMap(); };
+  }
+
+  renderBoard(rows, mine, shared) {
+    const el = $('daily-board');
+    if (!el) return;
+    if (!rows || !rows.length) {
+      el.innerHTML = `<p class="muted">${shared ? 'Ninguém pontuou hoje ainda. Seja o primeiro!' : `Seu melhor hoje: <b>${(mine || 0).toLocaleString('pt-BR')}</b> pts. O placar com outros jogadores só aparece na página publicada.`}</p>`;
+      return;
     }
+    el.innerHTML = `<h4>Placar de hoje</h4><ol>${rows.map((r) => `<li class="${r.me ? 'me' : ''}"><span>${r.name}${r.me ? ' (você)' : ''}</span><b>${r.score.toLocaleString('pt-BR')}</b></li>`).join('')}</ol>`;
+  }
+
+  // habilita/desabilita botões de compra conforme o dinheiro muda
+  refreshModal() {
+    if (!this.modalOpen || !this.modalRefresh || !this.game) return;
+    document.querySelectorAll('[data-cost]').forEach((b) => { b.disabled = this.game.state.money < +b.dataset.cost; });
   }
 }
-

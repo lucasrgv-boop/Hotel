@@ -1,6 +1,9 @@
 // Ponto de entrada: renderizador, câmera lateral (casa de bonecas aberta), luzes, entrada e loop.
 import * as THREE from 'three';
-import { FLOOR_H, BUILDING_W, TIERS } from './config.js';
+import { FLOOR_H, BUILDING_W, TIERS, setCols } from './config.js';
+import { levelById } from './levels.js';
+import { Meta, dailyLevel, Board } from './meta.js';
+import { WorldMap } from './worldmap.js';
 import { HotelView, buildEnvironment } from './building.js';
 import { setAnisotropy } from './textures.js';
 import { Game } from './game.js';
@@ -81,6 +84,7 @@ function applyCamera() {
 }
 // enquadra o prédio inteiro (todos os andares + telhado + calçada)
 function frameAll() {
+  if (!game) return { target: cam.target.clone(), dist: cam.dist };
   const aspect = window.innerWidth / window.innerHeight;
   const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
   const floors = game.state.floors;
@@ -123,17 +127,98 @@ sun.shadow.radius = 3;
 const ambient = new THREE.AmbientLight(0xffffff, 0.35);
 scene.add(hemi, sun, sun.target, ambient);
 
-// ---------- Mundo ----------
-const env = buildEnvironment(scene);
-const view = new HotelView(scene);
+// ---------- Mundo (recriado a cada hotel) ----------
+let env = null;
+let view = null;
+let game = null;
+let current = null; // { levelId, daily, seed }
 const ui = new UI();
-const game = new Game(scene, view, {
-  popup: (p, t, c) => ui.popup(p, t, c),
-  toast: (m, k) => ui.toast(m, k),
-  changed: () => ui.changed(),
-  floorsChanged: () => reframe(),
-});
-ui.attach(game, camera, {});
+
+const nav = {
+  toMap: () => showMap(),
+  restart: () => { if (current?.daily) startDaily(); else startLevel(current.levelId, true); },
+};
+
+function clearWorld() {
+  if (game) { game.save(); game.dispose(); }
+  if (env) scene.remove(env.group);
+  if (view) { scene.remove(view.root); scene.remove(view.hoverBox); }
+  game = null; view = null; env = null;
+}
+
+function buildWorld(level, opts) {
+  clearWorld();
+  setCols(level.cols);
+  env = buildEnvironment(scene, level);
+  view = new HotelView(scene, level);
+  game = new Game(scene, view, {
+    popup: (p, t, c) => ui.popup(p, t, c),
+    toast: (m, k) => ui.toast(m, k),
+    changed: () => ui.changed(),
+    floorsChanged: () => reframe(),
+    event: (e) => ui.event(e),
+    seasonEnd: (res) => onSeasonEnd(res),
+    seenTutorial: () => Meta.get().seenTutorial,
+  }, level, opts);
+  ui.attach(game, camera, nav);
+  ui.hidePanel();
+  const fr = frameAll();
+  cam.target.copy(fr.target); cam.dist = fr.dist; cam.goal = null;
+  applyCamera();
+  sun.shadow.camera.right = BUILDING_W + 6 - BUILDING_W / 2;
+  sun.shadow.camera.left = -sun.shadow.camera.right;
+  sun.shadow.camera.top = Math.max(24, level.maxFloors * FLOOR_H);
+  sun.shadow.camera.updateProjectionMatrix();
+}
+
+function startLevel(id, fresh) {
+  const level = levelById(id);
+  if (fresh) { try { localStorage.removeItem(`hotel-v5-${id}`); } catch { /* ignore */ } }
+  current = { levelId: id, daily: false };
+  map.hide();
+  buildWorld(level, { perks: Meta.get().perks });
+  document.getElementById('game-ui').classList.remove('hidden');
+  if (level.id === 'br' && !Meta.get().seenTutorial) {
+    document.getElementById('intro').classList.remove('hidden');
+    Meta.get().seenTutorial = true; Meta.save();
+  } else {
+    ui.event({ icon: 'plane', title: `Bem-vindo a ${level.city}!`, text: level.desc, kind: 'info' });
+  }
+}
+
+function startDaily() {
+  const { level, seed } = dailyLevel();
+  current = { levelId: level.id, daily: true };
+  map.hide();
+  buildWorld(level, { daily: true, seed });
+  document.getElementById('game-ui').classList.remove('hidden');
+  ui.event({ icon: 'party', title: 'Desafio do dia', text: `${level.name}: 4 meses, sem bônus. Faça a maior pontuação!`, kind: 'info' });
+}
+
+function showMap() {
+  if (game) game.save();
+  ui.closeModal();
+  document.getElementById('game-ui').classList.add('hidden');
+  document.getElementById('intro').classList.add('hidden');
+  map.show();
+}
+
+async function onSeasonEnd(res) {
+  ui.setSpeed(0);
+  if (res.daily) {
+    const { key } = dailyLevel();
+    ui.openResults(res, {});
+    await Board.init();
+    await Board.submit(key, res.score, res.level.id);
+    const rows = await Board.top(key);
+    ui.renderBoard(rows, Meta.get().daily[key]?.score, !!Board.db);
+  } else {
+    const info = Meta.record(res.level.id, res.stars, res.score);
+    ui.openResults(res, info);
+  }
+}
+
+const map = new WorldMap(ui, { play: (id, fresh) => startLevel(id, fresh), playDaily: () => startDaily() });
 
 function reframe() {
   const fr = frameAll();
@@ -155,8 +240,9 @@ function skyColor(h) {
   return tmpA.set(SKY[0][1]);
 }
 function updateDayNight() {
-  const h = game.hour;
-  const night = game.nightFactor();
+  const h = game ? game.hour : 10;
+  const night = game ? game.nightFactor() : 0;
+  const dark = game?.blackout ? 1 : 0;
   const sky = skyColor(h);
   renderer.setClearColor(sky);
   skyUniforms.bottom.value.copy(sky).lerp(tmpB.set(0xffffff), 0.25 * (1 - night));
@@ -170,7 +256,7 @@ function updateDayNight() {
   const a = ((h - 6) / 12) * Math.PI;
   const day = Math.max(0, Math.sin(a));
   // sol baixo, vindo da frente, para iluminar o interior dos andares
-  const c = game.state.floors * FLOOR_H / 2;
+  const c = (game ? game.state.floors : 1) * FLOOR_H / 2;
   sun.position.set(BUILDING_W / 2 - Math.cos(a) * 26, c + 8 + day * 14, 34);
   sun.target.position.set(BUILDING_W / 2, c, -2);
   sun.intensity = 0.5 + day * 1.6;
@@ -178,10 +264,15 @@ function updateDayNight() {
   hemi.intensity = 0.7 + day * 0.45;
   hemi.color.setHSL(0.6, 0.5, 0.6 + day * 0.32);
   // à noite, luz quente simulando os interiores acesos
-  ambient.intensity = 0.2 + night * 0.5;
+  ambient.intensity = (0.2 + night * 0.5) * (1 - dark * 0.7);
   ambient.color.setHex(night > 0.5 ? 0xffd2a0 : 0xffffff);
-  renderer.toneMappingExposure = 0.95 - night * 0.1;
-  for (const m of env.lamps) m.emissive.setRGB(night, night * 0.85, night * 0.45);
+  hemi.intensity *= 1 - dark * 0.45;
+  renderer.toneMappingExposure = 0.95 - night * 0.1 - dark * 0.25;
+  if (!env) return;
+  const lampK = dark ? 0 : night;
+  for (const m of env.lamps) m.emissive.setRGB(lampK, lampK * 0.85, lampK * 0.45);
+  for (const m of env.glows) m.emissiveIntensity = night * 0.9;
+  if (env.water) env.water.offset.x += 0.0004;
 }
 
 // ---------- Entrada ----------
@@ -192,6 +283,7 @@ let drag = null;
 let pinch = null;
 
 function pick(x, y) {
+  if (!game || game.ended) return null;
   ndc.set((x / window.innerWidth) * 2 - 1, -(y / window.innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const guestHits = game.guests.filter((g) => g.state === 'queue' || g.state === 'arriving').map((g) => g.hit);
@@ -215,9 +307,11 @@ function onClick(x, y) {
     if (sl.status === 'clean') {
       const g = game.selected || game.queue.find((q) => q.state === 'queue');
       if (g) { game.assign(g, f, i); ui.showSlot(f, i); return; }
-    } else if (sl.status === 'dirty') {
+    } else if (sl.status === 'dirty' || sl.status === 'broken') {
       game.select(null);
-      game.startManualClean(f, i);
+      game.startManualJob(f, i);
+    } else if (sl.status === 'occupied' && sl.guest?.request) {
+      game.fulfillRequest(f, i);
     }
   }
   if (game.selected) game.select(null);
@@ -232,22 +326,24 @@ function onHover(x, y) {
   if (hit.kind === 'guest') {
     view.hover(null);
     const g = hit.guest;
-    ui.hint(`${g.type.name} · quer ${TIERS[g.want].name} · ${g.nights} diária(s) — clique para selecionar`);
+    ui.hint(`${g.name} · quer ${TIERS[g.want].name} · ${g.nights} diária(s) — clique para selecionar`);
     return;
   }
   const sl = game.slot(hit.f, hit.i);
   if (sl.type === 'room') {
-    const st = { clean: 'Livre', occupied: 'Ocupado', dirty: 'Sujo', cleaning: 'Limpando' }[sl.status];
+    const st = { clean: 'Livre', occupied: 'Ocupado', dirty: 'Sujo', cleaning: 'Limpando', broken: 'Quebrado', repairing: 'Em conserto' }[sl.status];
     let act = '';
     if (sl.status === 'clean') act = game.selected || game.queue.length ? ' — clique para alocar' : '';
     if (sl.status === 'dirty') act = ' — clique para limpar';
+    if (sl.status === 'broken') act = ' — clique para consertar ($40)';
+    if (sl.status === 'occupied' && sl.guest?.request) act = ` — pediu ${sl.guest.request.name}: clique para atender`;
     ui.hint(`Quarto ${game.roomNumber(hit.f, hit.i)} · ${TIERS[sl.tier].name} · ${st}${act}`);
     view.hover(hit.f, hit.i, sl.status === 'clean' ? 0x6fdc5a : sl.status === 'dirty' ? 0xff6b6b : 0xffd34d);
   } else if (sl.type === 'empty') {
     ui.hint('Espaço vazio — clique para construir');
     view.hover(hit.f, hit.i, 0xffd34d);
   } else {
-    ui.hint({ snack: 'Lanchonete', gym: 'Academia', pool: 'Piscina' }[sl.type]);
+    ui.hint(game.facilityName(sl.type));
     view.hover(hit.f, hit.i, 0x6fcff2);
   }
 }
@@ -307,6 +403,7 @@ canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
+  if (!game) return;
   cam.dist = THREE.MathUtils.clamp(cam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 10, 140);
   cam.goalDist = null;
   applyCamera();
@@ -315,12 +412,12 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 function clampTarget() {
   cam.target.x = THREE.MathUtils.clamp(cam.target.x, -6, BUILDING_W + 6);
-  cam.target.y = THREE.MathUtils.clamp(cam.target.y, 0, game.state.floors * FLOOR_H + 3);
+  cam.target.y = THREE.MathUtils.clamp(cam.target.y, 0, (game ? game.state.floors : 1) * FLOOR_H + 3);
 }
 
 const keys = new Set();
 window.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT') return;
+  if (e.target.tagName === 'INPUT' || !game || map.visible) return;
   keys.add(e.key.toLowerCase());
   if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.speed === 0 ? (ui.prevSpeed || 1) : (ui.prevSpeed = game.speed, 0)); }
   if (e.key === '1') ui.setSpeed(1);
@@ -357,8 +454,8 @@ let hudAcc = 0;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  if (intro.classList.contains('hidden')) game.update(dt);
-  updateKeys(dt);
+  if (game && intro.classList.contains('hidden') && !map.visible) game.update(dt);
+  if (game) updateKeys(dt);
   if (cam.goal) {
     const k = 1 - Math.pow(0.01, dt);
     cam.target.lerp(cam.goal, k);
@@ -366,35 +463,38 @@ function frame(now) {
     if (cam.target.distanceTo(cam.goal) < 0.01) { cam.target.copy(cam.goal); cam.goal = null; cam.goalDist = null; }
     applyCamera();
   }
-  env.cars[0].position.x += dt * 6 * Math.max(0.5, game.speed);
-  if (env.cars[0].position.x > BUILDING_W + 60) env.cars[0].position.x = -60;
-  env.cars[1].position.x -= dt * 5 * Math.max(0.5, game.speed);
-  if (env.cars[1].position.x < -60) env.cars[1].position.x = BUILDING_W + 60;
+  const spd = game ? Math.max(0.5, game.speed) : 1;
+  if (env) {
+    env.cars[0].position.x += dt * 6 * spd;
+    if (env.cars[0].position.x > BUILDING_W + 60) env.cars[0].position.x = -60;
+    env.cars[1].position.x -= dt * 5 * spd;
+    if (env.cars[1].position.x < -60) env.cars[1].position.x = BUILDING_W + 60;
+  }
 
   updateDayNight();
   hudAcc += dt;
-  if (hudAcc > 0.1) {
+  if (hudAcc > 0.1 && game && !map.visible) {
     hudAcc = 0;
     ui.updateHUD();
     ui.refreshModal();
-    if (game.selected || (ui.panelTarget && game.slot(ui.panelTarget.f, ui.panelTarget.i)?.status === 'cleaning')) ui.changed();
+    const pst = ui.panelTarget && game.slot(ui.panelTarget.f, ui.panelTarget.i)?.status;
+    if (game.selected || pst === 'cleaning' || pst === 'repairing' || pst === 'occupied') ui.changed();
   }
   saveAcc += dt;
-  if (saveAcc > 10) { saveAcc = 0; game.save(); }
+  if (saveAcc > 10 && game) { saveAcc = 0; game.save(); }
   for (const c of clouds) {
-    c.position.x += dt * c.userData.speed * Math.max(0.5, game.speed);
+    c.position.x += dt * c.userData.speed * spd;
     if (c.position.x > BUILDING_W + 110) c.position.x = -110;
   }
   skyDome.position.copy(camera.position);
-  composer.render();
+  if (!map.visible) composer.render();
   requestAnimationFrame(frame);
 }
 
 window.addEventListener('resize', () => { resize(); const fr = frameAll(); cam.target.copy(fr.target); cam.dist = fr.dist; applyCamera(); });
-window.addEventListener('beforeunload', () => game.save());
-document.addEventListener('visibilitychange', () => { if (document.hidden) game.save(); });
+window.addEventListener('beforeunload', () => game?.save());
+document.addEventListener('visibilitychange', () => { if (document.hidden) game?.save(); });
 
-if (game.state.tutorial && game.state.stats.guests === 0) intro.classList.remove('hidden');
 document.getElementById('intro-start').onclick = () => {
   unlockAudio();
   Sfx.day();
@@ -402,9 +502,9 @@ document.getElementById('intro-start').onclick = () => {
 };
 
 resize();
-{ const fr = frameAll(); cam.target.copy(fr.target); cam.dist = fr.dist; }
 applyCamera();
+showMap();
 requestAnimationFrame(frame);
 
 // para depuração no console
-window.__hotel = { game, view, cam, applyCamera, ui, reframe };
+window.__hotel = { get game() { return game; }, get view() { return view; }, cam, applyCamera, ui, reframe, startLevel, startDaily, showMap, map, Meta };
