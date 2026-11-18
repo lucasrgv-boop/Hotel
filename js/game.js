@@ -388,7 +388,9 @@ export class Game {
     const fest = this.festivalActive()?.mult || 1;
     const seasonal = this.mods.seasonal?.[this.monthIndex + 1] || 1;
     const lvl = (this.mods.arrivals || 1) * (1 + 0.08 * this.perk('fame'));
-    return (0.12 + 0.16 * rooms) * tod * ratingF * mk * fac * fest * seasonal * lvl;
+    // cresce mais devagar que o número de quartos (raiz), para a fila não explodir em hotéis grandes
+    const A = this.arrivalA ?? 0.08, B = this.arrivalB ?? 0.13;
+    return (A + B * Math.sqrt(rooms)) * tod * ratingF * mk * fac * fest * seasonal * lvl * (this.arrivalScale ?? 1);
   }
 
   highFloor() { return Math.min(2, this.state.floors - 1); }

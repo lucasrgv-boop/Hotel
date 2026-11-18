@@ -18,9 +18,9 @@ export const LEVELS = [
     mods: {},
     festival: { name: 'Carnaval', months: [2], mult: 1.9 },
     goals: [
-      { kind: 'earned', value: 6000, label: 'Ganhar $6.000' },
+      { kind: 'earned', value: 10000, label: 'Ganhar $10.000' },
       { kind: 'rating', value: 3.5, label: 'Terminar com ★ 3,5' },
-      { kind: 'angry', value: 20, label: 'No máximo 20 irritados' },
+      { kind: 'angry', value: 10, label: 'No máximo 10 irritados' },
     ],
   },
   {
@@ -34,9 +34,9 @@ export const LEVELS = [
     mods: { patience: 0.75, arrivals: 1.35, wantUp: 0.15 },
     festival: { name: 'Réveillon na Times Square', months: [12], mult: 1.8 },
     goals: [
-      { kind: 'earned', value: 10000, label: 'Ganhar $10.000' },
-      { kind: 'rating', value: 3.8, label: 'Terminar com ★ 3,8' },
-      { kind: 'guests', value: 110, label: 'Atender 110 hóspedes' },
+      { kind: 'earned', value: 9000, label: 'Ganhar $9.000' },
+      { kind: 'rating', value: 3.6, label: 'Terminar com ★ 3,6' },
+      { kind: 'guests', value: 100, label: 'Atender 100 hóspedes' },
     ],
   },
   {
@@ -51,9 +51,9 @@ export const LEVELS = [
     facilityNames: { snack: 'Bistrô' },
     festival: { name: 'Festa Nacional', months: [7], mult: 1.7 },
     goals: [
-      { kind: 'earned', value: 11000, label: 'Ganhar $11.000' },
+      { kind: 'earned', value: 12000, label: 'Ganhar $12.000' },
       { kind: 'rating', value: 4.0, label: 'Terminar com ★ 4,0' },
-      { kind: 'angry', value: 12, label: 'No máximo 12 irritados' },
+      { kind: 'angry', value: 6, label: 'No máximo 6 irritados' },
     ],
   },
   {
@@ -67,9 +67,9 @@ export const LEVELS = [
     mods: { dirtyPenalty: 0.012, patience: 0.9 },
     festival: { name: 'Hanami (cerejeiras)', months: [4], mult: 1.8 },
     goals: [
-      { kind: 'earned', value: 6000, label: 'Ganhar $6.000' },
+      { kind: 'earned', value: 9000, label: 'Ganhar $9.000' },
       { kind: 'rating', value: 3.6, label: 'Terminar com ★ 3,6' },
-      { kind: 'angry', value: 20, label: 'No máximo 20 irritados' },
+      { kind: 'angry', value: 10, label: 'No máximo 10 irritados' },
     ],
   },
   {
@@ -84,9 +84,9 @@ export const LEVELS = [
     facilityNames: { pool: 'Spa' },
     festival: { name: 'Semana do esqui', months: [1, 2], mult: 1.5 },
     goals: [
-      { kind: 'earned', value: 12000, label: 'Ganhar $12.000' },
-      { kind: 'rating', value: 4.2, label: 'Terminar com ★ 4,2' },
-      { kind: 'angry', value: 18, label: 'No máximo 18 irritados' },
+      { kind: 'earned', value: 15000, label: 'Ganhar $15.000' },
+      { kind: 'rating', value: 3.8, label: 'Terminar com ★ 3,8' },
+      { kind: 'angry', value: 12, label: 'No máximo 12 irritados' },
     ],
   },
   {
@@ -100,9 +100,9 @@ export const LEVELS = [
     mods: { vipBoost: true, suiteMult: 1.5, wantUp: 0.25 },
     festival: { name: 'Festival de Compras', months: [12, 1], mult: 1.7 },
     goals: [
-      { kind: 'earned', value: 16000, label: 'Ganhar $16.000' },
+      { kind: 'earned', value: 25000, label: 'Ganhar $25.000' },
       { kind: 'rating', value: 4.0, label: 'Terminar com ★ 4,0' },
-      { kind: 'angry', value: 12, label: 'No máximo 12 irritados' },
+      { kind: 'angry', value: 6, label: 'No máximo 6 irritados' },
     ],
   },
 ];
