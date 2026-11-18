@@ -99,6 +99,19 @@ export class UI {
       $('stars').parentElement.title = `Avaliação: ${st.rating.toFixed(2)} / 5`;
       $('guests').textContent = st.stats.guests;
     }
+    let free = 0, occ = 0, dirty = 0;
+    for (const r of g.rooms()) {
+      if (r.sl.status === 'clean') free++;
+      else if (r.sl.status === 'occupied') occ++;
+      else dirty++;
+    }
+    const rk = `${free}|${occ}|${dirty}`;
+    if (rk !== this.lastRooms) {
+      this.lastRooms = rk;
+      $('n-free').textContent = free; $('n-occ').textContent = occ; $('n-dirty').textContent = dirty;
+      $('n-free').parentElement.classList.toggle('zero', !free);
+      $('n-dirty').parentElement.classList.toggle('zero', !dirty);
+    }
     if (this.dirty) { this.dirty = false; this.renderPanel(); }
     this.renderFloors();
   }

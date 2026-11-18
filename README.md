@@ -12,6 +12,7 @@ Jogo simples de administrar um hotel, em **3D estilo cartoon visto de lado** (ca
   - **Construa** em espaços vazios: quartos, lanchonete, academia, piscina.
   - **Reforme** quartos para Luxo e Suíte (diárias maiores, hóspedes VIP).
   - **Melhorias**: novos andares, camareiras (limpeza automática), recepcionista (alocação automática), decoração, marketing e kit de limpeza.
+- Cada quarto tem uma placa acima da entrada: **verde = LIVRE**, **vermelho = OCUPADO**, **laranja = SUJO**, **azul = LIMPANDO**. O topo da tela mostra o total de cada um.
 - A **avaliação** (estrelas) sobe com hóspedes satisfeitos e cai com quem desiste da fila. Mais estrelas = mais hóspedes e clientes mais exigentes.
 - Ciclo de dia e noite; salários são pagos à meia-noite. O jogo salva automaticamente no navegador.
 
@@ -47,7 +48,7 @@ Também funciona publicado no GitHub Pages (é tudo estático).
 - `js/textures.js` — texturas e ícones vetoriais gerados por código.
 - `js/audio.js` — efeitos sonoros 8-bit via WebAudio.
 - `js/config.js` — preços, custos e balanceamento.
-- `vendor/` — Three.js r170 e RoundedBoxGeometry (licença MIT).
+- `vendor/` — Three.js r170, RoundedBoxGeometry, RoomEnvironment e pós-processamento (bloom) dos exemplos do Three.js (licença MIT).
 
 ## Versão em arquivo único
 

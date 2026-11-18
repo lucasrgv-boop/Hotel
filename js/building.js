@@ -24,7 +24,7 @@ function std(color, rough = 0.8, extra = {}) {
   if (!matCache.has(k)) matCache.set(k, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, ...extra }));
   return matCache.get(k);
 }
-function texMat(tex, rx, ry, color = 0xffffff, rough = 0.85) {
+function texMat(tex, rx, ry, color = 0xffffff, rough = 0.62) {
   return new THREE.MeshStandardMaterial({ map: rep(tex, rx, ry), color, roughness: rough });
 }
 function asMat(m) { return typeof m === 'number' ? std(m) : m; }
@@ -125,6 +125,62 @@ function buildShell(g, { floorMat }) {
   box(g, 0, WALL_H - 0.12, -0.12, SLOT_W, 0.12, 0.12, std(TRIM, 0.8), false);
 }
 
+// ---------- Placa de status do quarto ----------
+export const STATUS_STYLE = {
+  clean:    { label: 'LIVRE',    color: 0x2fb350, css: '#2fb350' },
+  occupied: { label: 'OCUPADO',  color: 0xe0434f, css: '#e0434f' },
+  dirty:    { label: 'SUJO',     color: 0xe0802a, css: '#e0802a' },
+  cleaning: { label: 'LIMPANDO', color: 0x2f8fe0, css: '#2f8fe0' },
+};
+class StatusSign {
+  constructor(num, tier) {
+    this.num = num;
+    this.tier = tier;
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = 384; this.canvas.height = 96;
+    this.tex = new THREE.CanvasTexture(this.canvas);
+    this.tex.colorSpace = THREE.SRGBColorSpace;
+    this.tex.anisotropy = 4;
+    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tex, transparent: true, toneMapped: false }));
+    this.sprite.scale.set(2.9, 0.72, 1);
+    this.sprite.renderOrder = 6;
+    this.key = '';
+    this.set('clean');
+  }
+  set(status, progress = 0) {
+    const key = `${status}|${Math.round(progress * 20)}`;
+    if (key === this.key) return;
+    this.key = key;
+    const st = STATUS_STYLE[status];
+    const g = this.canvas.getContext('2d');
+    const W = 384, H = 96;
+    g.clearRect(0, 0, W, H);
+    g.fillStyle = 'rgba(0,0,0,0.22)';
+    rr(g, 4, 10, W - 8, H - 12, 34); g.fill();
+    g.fillStyle = '#ffffff';
+    rr(g, 2, 2, W - 6, H - 12, 34); g.fill();
+    g.fillStyle = st.css;
+    rr(g, 8, 8, W - 18, H - 24, 28); g.fill();
+    if (status === 'cleaning') { // barra de progresso dentro da placa
+      g.fillStyle = 'rgba(255,255,255,0.35)';
+      rr(g, 8, 8, Math.max(56, (W - 18) * progress), H - 24, 28); g.fill();
+    }
+    // número do quarto num círculo branco com a cor da categoria
+    g.fillStyle = '#ffffff';
+    rr(g, 16, 16, 110, H - 40, 24); g.fill();
+    g.fillStyle = hex(TIERS[this.tier].color);
+    g.fillRect(24, H - 30, 94, 5);
+    g.fillStyle = '#3a3340';
+    g.font = 'bold 40px Fredoka, Nunito, sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(this.num), 71, 40);
+    g.fillStyle = '#ffffff';
+    g.font = 'bold 42px Fredoka, Nunito, sans-serif';
+    g.fillText(st.label, 248, 44);
+    this.tex.needsUpdate = true;
+  }
+}
+
 // luminária pendente no teto
 function pendant(g, x, z, color = 0xfff1c4) {
   const m = new THREE.MeshStandardMaterial({ color, emissive: 0x000000, roughness: 0.5 });
@@ -208,9 +264,24 @@ function buildRoom(g, slot, num) {
   dirt.visible = false;
   g.add(dirt);
 
-  const lbl = textSprite(String(num), { bg: '#ffffff', fg: '#3a3340', size: 0.5, w: 160, h: 96, font: 'bold 58px Fredoka, Nunito, sans-serif' });
-  lbl.position.set(0.75, WALL_H - 0.8, -0.1);
-  g.add(lbl);
+  // placa de status (número + LIVRE/OCUPADO/...) e faixas de luz na cor do status
+  const sign = new StatusSign(num, tier);
+  // na borda da laje logo acima do quarto (como um letreiro): sempre visível de fora
+  sign.sprite.position.set(SLOT_W / 2, WALL_H + 0.12, FRONT_Z + 0.6);
+  g.add(sign.sprite);
+  const barMat = new THREE.MeshBasicMaterial({ color: 0x3fbf5a, toneMapped: false });
+  const floorBar = new THREE.Mesh(bgeo(SLOT_W - 0.3, 0.05, 0.12), barMat);
+  floorBar.position.set(SLOT_W / 2, 0.03, -0.1);
+  const topBar = new THREE.Mesh(bgeo(SLOT_W - 0.2, 0.2, 0.04), barMat);
+  topBar.position.set(SLOT_W / 2, WALL_H + 0.15, FRONT_Z + 0.15);
+  g.add(floorBar, topBar);
+  // luz tingida no piso do quarto
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0x3fbf5a, transparent: true, opacity: 0.16, depthWrite: false });
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(SLOT_W - 0.2, 1.4), glowMat);
+  glow.rotation.x = -Math.PI / 2; glow.position.set(SLOT_W / 2, 0.025, -0.75);
+  glow.renderOrder = 1;
+  g.add(glow);
+  g.userData.status = { sign, barMat, glowMat };
   // quadro acima da cama e luminária
   rbox(g, bx + bedW / 2 - 0.55, 1.45, -ROOM_D + 0.05, 1.1, 0.75, 0.06, 0xffffff, 0.02);
   box(g, bx + bedW / 2 - 0.47, 1.52, -ROOM_D + 0.1, 0.94, 0.6, 0.01, new THREE.MeshStandardMaterial({ map: Tex.painting(num), roughness: 0.8 }), false);
@@ -693,6 +764,18 @@ export class HotelView {
   pickables() { return this.hitboxes; }
 
   setProgress() { /* o progresso aparece no balão do quarto */ }
+
+  // atualiza placa, faixas de luz e brilho do piso conforme o status do quarto
+  setStatus(f, i, status, progress = 0, pulse = 1) {
+    const g = this.slotGroups.get(this.slotKey(f, i));
+    const s = g?.userData.status;
+    if (!s) return;
+    s.sign.set(status, progress);
+    const st = STATUS_STYLE[status];
+    s.barMat.color.setHex(st.color).multiplyScalar(1.6 * pulse);
+    s.glowMat.color.setHex(st.color);
+    s.glowMat.opacity = status === 'clean' ? 0.22 * pulse : 0.12;
+  }
 
   setDirty(f, i, dirty) {
     const g = this.slotGroups.get(this.slotKey(f, i));

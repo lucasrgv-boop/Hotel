@@ -106,7 +106,7 @@ export class Game {
     this.view.setDirty(f, i, sl.type === 'room' && (sl.status === 'dirty' || sl.status === 'cleaning'));
     if (!g.userData.bubble) {
       const b = new Bubble(1.5);
-      b.sprite.position.set(SLOT_W / 2, 2.05, -0.9);
+      b.sprite.position.set(SLOT_W / 2, 1.55, -0.9);
       b.sprite.visible = false;
       g.add(b.sprite);
       g.userData.bubble = b;
@@ -791,9 +791,13 @@ export class Game {
         else if (sl.status === 'cleaning') { b.sprite.visible = true; b.set('broom', Math.min(1, sl.cleanP || 0), null, '#52c45a', 0, '#52c45a'); }
         else b.sprite.visible = false;
         this.view.setLight(f, i, sl.status === 'occupied', night);
+        // quarto livre pisca suavemente quando há hóspede esperando
+        const waiting = sl.status === 'clean' && this.queue.some((q) => q.state === 'queue');
+        const pulse = waiting ? 0.75 + 0.25 * Math.sin(t / 220) : 1;
+        this.view.setStatus(f, i, sl.status, sl.cleanP || 0, pulse);
       } else {
         b.sprite.visible = false;
-        if (grp.userData.plus) grp.userData.plus.position.y = 1.0 + Math.sin(t / 400 + i) * 0.08;
+        if (grp.userData.plus) grp.userData.plus.position.y = 1.4 + Math.sin(t / 400 + i) * 0.08;
       }
       if (grp.userData.water) grp.userData.water.offset.x += dt * 0.04;
       if (grp.userData.ring) grp.userData.ring.position.y = grp.userData.ringY + Math.sin(t / 600) * 0.03;

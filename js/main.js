@@ -6,6 +6,11 @@ import { setAnisotropy } from './textures.js';
 import { Game } from './game.js';
 import { UI } from './ui.js';
 import { unlockAudio, Sfx } from './audio.js';
+import { RoomEnvironment } from '../vendor/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js';
 
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -18,7 +23,43 @@ renderer.toneMappingExposure = 1.05;
 setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xbfe3f5, 70, 150);
+scene.fog = new THREE.Fog(0xbfe3f5, 90, 220);
+
+// reflexos suaves de ambiente (deixa os materiais mais "vivos")
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.22;
+
+// ---------- Céu em degradê com nuvens ----------
+const skyUniforms = { top: { value: new THREE.Color(0x6fb8ec) }, bottom: { value: new THREE.Color(0xd8eefa) } };
+const skyDome = new THREE.Mesh(
+  new THREE.SphereGeometry(320, 32, 16),
+  new THREE.ShaderMaterial({
+    uniforms: skyUniforms, side: THREE.BackSide, depthWrite: false, fog: false,
+    vertexShader: 'varying vec3 vP; void main(){ vP = (modelMatrix * vec4(position,1.0)).xyz; gl_Position = projectionMatrix * viewMatrix * vec4(vP,1.0); }',
+    fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float h = clamp(normalize(vP - cameraPosition).y * 2.2 + 0.15, 0.0, 1.0); gl_FragColor = vec4(mix(bottom, top, h), 1.0); }',
+  }),
+);
+skyDome.renderOrder = -10;
+scene.add(skyDome);
+const clouds = [];
+{
+  const cm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, fog: false, transparent: true, opacity: 0.95 });
+  for (let k = 0; k < 9; k++) {
+    const c = new THREE.Group();
+    const n = 4 + (k % 3);
+    for (let j = 0; j < n; j++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(2.2 + Math.random() * 1.8, 14, 10), cm);
+      b.position.set(j * 2.6 - n * 1.3, Math.random() * 1.2, Math.random() * 1.5);
+      b.scale.y = 0.65;
+      c.add(b);
+    }
+    c.position.set(-70 + k * 22 + Math.random() * 8, 24 + Math.random() * 14, -90 - Math.random() * 40);
+    c.userData.speed = 0.4 + Math.random() * 0.5;
+    clouds.push(c);
+    scene.add(c);
+  }
+}
 
 // ---------- Câmera em perspectiva, vista de cima ----------
 const camera = new THREE.PerspectiveCamera(28, 1, 0.5, 500);
@@ -53,8 +94,20 @@ function frameAll() {
     dist: THREE.MathUtils.clamp(portrait ? 17 / (2 * t * aspect) : Math.max(byW, byH), 16, 140),
   };
 }
+// pós-processamento: brilho (bloom) nas luzes e placas, com antisserrilhado (MSAA)
+const pr = Math.min(window.devicePixelRatio || 1, 2);
+const rt = new THREE.WebGLRenderTarget(window.innerWidth * pr, window.innerHeight * pr, { type: THREE.HalfFloatType, samples: 4 });
+const composer = new EffectComposer(renderer, rt);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), 0.3, 0.4, 1.05);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
 function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight, false);
+  composer.setPixelRatio(pr);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  bloom.resolution.set(window.innerWidth / 2, window.innerHeight / 2);
   applyCamera();
 }
 
@@ -106,7 +159,13 @@ function updateDayNight() {
   const night = game.nightFactor();
   const sky = skyColor(h);
   renderer.setClearColor(sky);
-  scene.fog.color.copy(sky);
+  skyUniforms.bottom.value.copy(sky).lerp(tmpB.set(0xffffff), 0.25 * (1 - night));
+  skyUniforms.top.value.copy(sky).multiplyScalar(0.62 + 0.1 * night);
+  scene.fog.color.copy(skyUniforms.bottom.value);
+  for (const c of clouds) {
+    c.children[0].material.opacity = 0.95 - night * 0.7;
+  }
+  bloom.strength = 0.35 + night * 0.45;
   document.body.style.background = `#${sky.getHexString()}`;
   const a = ((h - 6) / 12) * Math.PI;
   const day = Math.max(0, Math.sin(a));
@@ -114,14 +173,14 @@ function updateDayNight() {
   const c = game.state.floors * FLOOR_H / 2;
   sun.position.set(BUILDING_W / 2 - Math.cos(a) * 26, c + 8 + day * 14, 34);
   sun.target.position.set(BUILDING_W / 2, c, -2);
-  sun.intensity = 0.5 + day * 2.0;
+  sun.intensity = 0.5 + day * 1.6;
   sun.color.setHSL(0.09, 0.5 + (1 - day) * 0.3, 0.75 + day * 0.2);
-  hemi.intensity = 0.9 + day * 0.7;
+  hemi.intensity = 0.7 + day * 0.45;
   hemi.color.setHSL(0.6, 0.5, 0.6 + day * 0.32);
   // à noite, luz quente simulando os interiores acesos
-  ambient.intensity = 0.3 + night * 0.45;
+  ambient.intensity = 0.2 + night * 0.5;
   ambient.color.setHex(night > 0.5 ? 0xffd2a0 : 0xffffff);
-  renderer.toneMappingExposure = 1.05 - night * 0.12;
+  renderer.toneMappingExposure = 0.95 - night * 0.1;
   for (const m of env.lamps) m.emissive.setRGB(night, night * 0.85, night * 0.45);
 }
 
@@ -322,7 +381,12 @@ function frame(now) {
   }
   saveAcc += dt;
   if (saveAcc > 10) { saveAcc = 0; game.save(); }
-  renderer.render(scene, camera);
+  for (const c of clouds) {
+    c.position.x += dt * c.userData.speed * Math.max(0.5, game.speed);
+    if (c.position.x > BUILDING_W + 110) c.position.x = -110;
+  }
+  skyDome.position.copy(camera.position);
+  composer.render();
   requestAnimationFrame(frame);
 }
 

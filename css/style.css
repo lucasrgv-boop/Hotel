@@ -79,6 +79,15 @@ html, body {
 }
 .speed button.on { background: var(--gold); color: var(--ink); }
 
+/* resumo dos quartos (mesmas cores das placas) */
+.stat.rooms { gap: 6px; padding: 6px 8px; font-size: 13px; }
+.chip { color: #fff; border-radius: 999px; padding: 3px 10px; font-family: var(--display); font-weight: 600; }
+.chip b { font-weight: 700; font-size: 15px; }
+.chip.free { background: #2fb350; }
+.chip.occ { background: #e0434f; }
+.chip.dirty { background: #e0802a; }
+.chip.zero { opacity: 0.4; }
+
 /* ---------- Abas de andares ---------- */
 #floors {
   position: fixed; left: max(10px, env(safe-area-inset-left, 0px)); top: 50%; transform: translateY(-50%);
@@ -184,6 +193,7 @@ html, body {
   html, body { font-size: 13px; }
   .stat { font-size: 14px; padding: 5px 10px 5px 6px; }
   .stat .ico { width: 20px; height: 20px; }
+  .chip { padding: 2px 7px; font-size: 11px; }
   .btn { font-size: 13px; padding: 7px 10px; }
   #panel { width: auto; left: 10px; }
   #hint { bottom: auto; top: 120px; max-width: calc(100vw - 20px); }
