@@ -185,7 +185,7 @@ html, body {
   .stat { font-size: 14px; padding: 5px 10px 5px 6px; }
   .stat .ico { width: 20px; height: 20px; }
   .btn { font-size: 13px; padding: 7px 10px; }
-  #panel { width: auto; left: 76px; }
+  #panel { width: auto; left: 10px; }
   #hint { bottom: auto; top: 120px; max-width: calc(100vw - 20px); }
   .floor-btn { width: 50px; height: 46px; font-size: 16px; }
 }

@@ -1,7 +1,7 @@
 // Lógica do jogo: estado, hóspedes, camareiras, economia e progressão.
 import * as THREE from 'three';
 import {
-  FLOOR_H, SLOT_W, ROOM_D, CORR_HALF, CORE_W, COLS, CORRIDOR_Z, ELEV_X, ELEV_Z, SLOTS_PER_FLOOR,
+  FLOOR_H, SLOT_W, ROOM_D, CORE_W, CORRIDOR_Z, ELEV_X, ELEV_Z, SLOTS_PER_FLOOR,
   MAX_FLOORS, BUILDING_W, FRONT_Z, DOOR_X, STREET_Z, LOBBY_SLOTS,
   REAL_SEC_PER_HOUR, HOURS_PER_NIGHT, TIERS, BUILDABLES, UPGRADES, GUEST_TYPES,
   START_MONEY, QUEUE_MAX, BASE_PATIENCE, CLEAN_TIME,
@@ -9,10 +9,11 @@ import {
 import { createPerson, animatePerson, Bubble } from './characters.js';
 import { Sfx } from './audio.js';
 
-const SAVE_KEY = 'hotel-save-v2';
-const QUEUE_POS = [[10.85, 3.4], [9.95, 3.4], [9.05, 3.4], [8.15, 3.4], [7.25, 3.4], [6.35, 3.4], [5.45, 3.4]];
-const MAID_IDLE = [[1.3, 2.4], [2.2, 2.4], [1.3, 3.3], [2.2, 3.3], [3.1, 3.0]];
-const LOBBY_IN_Z = FRONT_Z - 1.1;
+const SAVE_KEY = 'hotel-save-v3';
+// fila em frente ao balcão (x 7..10.4), virando para a esquerda
+const QUEUE_POS = [[8.7, -1.65], [8.7, -0.85], [7.8, -0.25], [6.9, -0.25], [6.0, -0.25], [5.1, -0.25], [4.2, -0.25]];
+const MAID_IDLE = [[11.2, -1.4], [12.0, -1.4], [11.2, -0.6], [12.0, -0.6], [12.4, -2.2]];
+const LOBBY_IN_Z = 0.6;
 const SPAWN_L = -14, SPAWN_R = BUILDING_W + 14;
 
 function rand(a, b) { return a + Math.random() * (b - a); }
@@ -23,8 +24,8 @@ function emptyFloor() { return Array.from({ length: SLOTS_PER_FLOOR }, () => ({ 
 function newState() {
   const ground = emptyFloor();
   for (const i of LOBBY_SLOTS) ground[i] = { type: 'lobby' };
-  ground[0] = { type: 'room', tier: 0, status: 'clean' };
-  ground[1] = { type: 'room', tier: 0, status: 'clean' };
+  ground[2] = { type: 'room', tier: 0, status: 'clean' };
+  ground[3] = { type: 'room', tier: 0, status: 'clean' };
   return {
     money: START_MONEY,
     time: 7,
@@ -105,7 +106,7 @@ export class Game {
     this.view.setDirty(f, i, sl.type === 'room' && (sl.status === 'dirty' || sl.status === 'cleaning'));
     if (!g.userData.bubble) {
       const b = new Bubble(1.5);
-      b.sprite.position.set(SLOT_W / 2, 2.5, -ROOM_D / 2);
+      b.sprite.position.set(SLOT_W / 2, 2.05, -0.9);
       b.sprite.visible = false;
       g.add(b.sprite);
       g.userData.bubble = b;
@@ -148,35 +149,16 @@ export class Game {
   }
 
   // ---------------- Caminhos ----------------
-  // qual espaço com porta contém (x, z)? null = área aberta (corredor, lobby, núcleo)
-  slotAt(f, x, z) {
-    if (Math.abs(z) <= CORR_HALF + 0.01 || x < CORE_W || x > BUILDING_W) return null;
-    const col = Math.floor((x - CORE_W) / SLOT_W);
-    if (col < 0 || col >= COLS) return null;
-    const i = (z < 0 ? 0 : COLS) + col;
-    const sl = this.slot(f, i);
-    if (!sl || sl.type === 'lobby') return null;
-    return i;
-  }
-
+  // caminho: corredor -> (elevador) -> corredor -> destino
   route(ent, toF, tx, tz) {
     const p = ent.mesh.position;
     const f = ent.f;
     const pts = [];
-    const from = this.slotAt(f, p.x, p.z);
-    if (from !== null) {
-      const d = this.view.door(f, from);
-      pts.push([d.x, f, d.zIn], [d.x, f, CORRIDOR_Z]);
-    } else if (Math.abs(p.z - CORRIDOR_Z) > 0.05) pts.push([p.x, f, CORRIDOR_Z]);
+    if (Math.abs(p.z - CORRIDOR_Z) > 0.05) pts.push([p.x, f, CORRIDOR_Z]);
     if (f !== toF) {
       pts.push([ELEV_X, f, CORRIDOR_Z], [ELEV_X, f, ELEV_Z], [ELEV_X, toF, ELEV_Z], [ELEV_X, toF, CORRIDOR_Z]);
     }
-    const to = this.slotAt(toF, tx, tz);
-    if (to !== null) {
-      const d = this.view.door(toF, to);
-      pts.push([d.x, toF, CORRIDOR_Z], [d.x, toF, d.zIn]);
-    } else pts.push([tx, toF, CORRIDOR_Z]);
-    pts.push([tx, toF, tz]);
+    pts.push([tx, toF, CORRIDOR_Z], [tx, toF, tz]);
     return pts;
   }
 
@@ -197,6 +179,7 @@ export class Game {
     const vertical = Math.abs(dy) > 0.01 && Math.abs(dx) < 0.01 && Math.abs(dz) < 0.01;
     const sp = (vertical ? 4.5 : 3.2) * (ent.speedMul || 1) * dt;
     ent.inElev = vertical;
+    if (ent.platform) ent.platform.visible = vertical;
     if (dist <= sp) {
       p.set(tx, ty, tz);
       ent.f = tf;
@@ -213,6 +196,7 @@ export class Game {
     animatePerson(ent.mesh, dt, !vertical, ent.speedMul || 1);
     if (ent.path.length === 0) {
       ent.inElev = false;
+      if (ent.platform) ent.platform.visible = false;
       const cb = ent.onArrive; ent.onArrive = null;
       if (cb) cb();
       return true;
@@ -223,8 +207,22 @@ export class Game {
   makeEntityMesh(opts) {
     const mesh = createPerson(opts);
     mesh.rotation.order = 'YXZ';
+    // cabine do elevador (aparece durante a subida/descida)
+    const platform = new THREE.Group();
+    const floorM = new THREE.MeshStandardMaterial({ color: 0x8a90a0, roughness: 0.4, metalness: 0.4 });
+    const pf = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.12, 2.0), floorM);
+    pf.position.y = -0.06;
+    const top = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.1, 2.0), floorM);
+    top.position.y = 2.45;
+    platform.add(pf, top);
+    for (const x of [-1.1, 1.1]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.5, 0.06), floorM);
+      bar.position.set(x, 1.2, -0.95); platform.add(bar);
+    }
+    platform.visible = false;
+    mesh.add(platform);
     this.scene.add(mesh);
-    return { mesh };
+    return { mesh, platform };
   }
 
   // ---------------- Hóspedes ----------------
@@ -243,7 +241,7 @@ export class Game {
     const hatOpts = t.id === 'vip' ? { hat: true, hatColor: 0x2a2a30 }
       : t.id === 'tourist' && Math.random() < 0.6 ? { hat: true, hatColor: 0xf3e2a0 }
         : t.id === 'backpacker' && Math.random() < 0.5 ? { hat: 'cap', hatColor: [0xd9473b, 0x4f9bd9, 0x6cbf4a][randi(0, 2)] } : {};
-    const { mesh } = this.makeEntityMesh({
+    const { mesh, platform } = this.makeEntityMesh({
       shirt: t.shirt,
       suitcase: [0xd9473b, 0x4f9bd9, 0x8a5530, 0x3a3340, 0xa267d6][randi(0, 4)],
       ...hatOpts,
@@ -261,7 +259,7 @@ export class Game {
     const patienceMul = 1 + this.state.upgrades.decor * 0.3;
     const g = {
       id: this.idSeq++, type: t, want: t.want, nights: randi(t.nights[0], t.nights[1]),
-      mesh, bubble, ring, hit, f: 0,
+      mesh, platform, bubble, ring, hit, f: 0,
       patience: BASE_PATIENCE * patienceMul * rand(0.85, 1.2), maxPatience: 0,
       state: 'arriving', visits: 0, sat: 60, waitFrac: 1, stayLeft: 0, room: null,
       speedMul: rand(0.9, 1.15), moodTimer: 0, mood: null,
@@ -270,7 +268,7 @@ export class Game {
     hit.userData = { kind: 'guest', guest: g };
     this.guests.push(g);
     this.queue.push(g);
-    this.setPath(g, [[DOOR_X + rand(-0.4, 0.4), 0, STREET_Z], [DOOR_X, 0, FRONT_Z + 0.6], [DOOR_X, 0, LOBBY_IN_Z]], () => this.updateQueueTargets());
+    this.setPath(g, [[DOOR_X + rand(-0.4, 0.4), 0, STREET_Z], [DOOR_X, 0, LOBBY_IN_Z]], () => this.updateQueueTargets());
     if (this.state.tutorial && this.state.stats.guests === 0 && this.guests.length === 1) {
       this.hooks.toast('Um hóspede chegou! Clique nele e depois num quarto livre.', 'info');
     }
@@ -281,12 +279,12 @@ export class Game {
       const [x, z] = QUEUE_POS[Math.min(idx, QUEUE_POS.length - 1)];
       g.queueIdx = idx;
       const p = g.mesh.position;
-      const inside = p.z < FRONT_Z && p.z > CORR_HALF && p.x > CORE_W && p.x < CORE_W + 2 * SLOT_W;
+      const inside = p.z < FRONT_Z && p.x > CORE_W && p.x < CORE_W + 2 * SLOT_W;
       if (!inside) return;
       if (g.state === 'arriving' && g.path && g.path.length) return;
       g.state = 'queue';
       if (Math.hypot(p.x - x, p.z - z) > 0.05) {
-        this.setPath(g, [[x, 0, z]], () => { g.mesh.rotation.y = Math.PI / 2; });
+        this.setPath(g, [[x, 0, z]], () => { g.mesh.rotation.y = idx < 2 ? Math.PI : Math.PI * 0.75; });
       }
     });
   }
@@ -449,7 +447,7 @@ export class Game {
 
   walkAway(g) {
     const exitX = Math.random() < 0.5 ? SPAWN_L : SPAWN_R;
-    this.setPath(g, [[DOOR_X, 0, FRONT_Z + 0.6], [DOOR_X, 0, STREET_Z], [exitX, 0, STREET_Z]], () => { g.state = 'gone'; });
+    this.setPath(g, [[DOOR_X, 0, STREET_Z], [exitX, 0, STREET_Z]], () => { g.state = 'gone'; });
   }
 
   guestGivesUp(g) {
@@ -530,20 +528,20 @@ export class Game {
     this.view.setDirty(f, i, false);
     if (this.manualCleaning && this.manualCleaning.f === f && this.manualCleaning.i === i) this.manualCleaning = null;
     Sfx.clean();
-    if (f === this.view.viewFloor) this.hooks.popup(this.slotCenter(f, i, 1.8), 'Limpo!', '#9fe870');
+    this.hooks.popup(this.slotCenter(f, i, 1.8), 'Limpo!', '#9fe870');
     this.hooks.changed();
   }
 
   addMaid() {
-    const { mesh } = this.makeEntityMesh({ shirt: 0x34507a, pants: 0x34507a, hairStyle: 1, apron: true });
+    const { mesh, platform } = this.makeEntityMesh({ shirt: 0x34507a, pants: 0x34507a, hairStyle: 1, apron: true });
     const idx = this.maids.length;
     const [x, z] = MAID_IDLE[idx % MAID_IDLE.length];
     mesh.position.set(x, 0, z);
-    mesh.rotation.y = Math.PI / 2;
+    mesh.rotation.y = 0;
     const bubble = new Bubble(1.2);
     bubble.sprite.position.y = 2.3; bubble.sprite.visible = false;
     mesh.add(bubble.sprite);
-    this.maids.push({ id: idx, mesh, bubble, f: 0, state: 'idle', target: null, home: [x, z], speedMul: 1.15 });
+    this.maids.push({ id: idx, mesh, platform, bubble, f: 0, state: 'idle', target: null, home: [x, z], speedMul: 1.15 });
   }
 
   updateMaids(dt) {
@@ -589,7 +587,7 @@ export class Game {
     m.state = 'home';
     m.bubble.sprite.visible = false;
     m.mesh.rotation.set(0, m.mesh.rotation.y, 0);
-    this.setPath(m, this.route(m, 0, m.home[0], m.home[1]), () => { m.state = 'idle'; m.mesh.rotation.y = Math.PI / 2; });
+    this.setPath(m, this.route(m, 0, m.home[0], m.home[1]), () => { m.state = 'idle'; m.mesh.rotation.y = 0; });
   }
 
   // ---------------- Construção / melhorias ----------------
@@ -777,12 +775,8 @@ export class Game {
     this.updateVisibility();
   }
 
-  // só aparece quem está no andar visto (e fora do poço do elevador)
-  updateVisibility() {
-    const vf = this.view.viewFloor;
-    for (const e of this.guests) e.mesh.visible = e.f === vf && !e.inElev;
-    for (const e of this.maids) e.mesh.visible = e.f === vf && !e.inElev;
-  }
+  // vista lateral: todos os andares e pessoas ficam visíveis
+  updateVisibility() {}
 
   updateSlotVisuals(dt) {
     const night = this.nightFactor();
@@ -801,14 +795,14 @@ export class Game {
         b.sprite.visible = false;
         if (grp.userData.plus) grp.userData.plus.position.y = 1.0 + Math.sin(t / 400 + i) * 0.08;
       }
-      if (f !== this.view.viewFloor) continue;
       if (grp.userData.water) grp.userData.water.offset.x += dt * 0.04;
       if (grp.userData.ring) grp.userData.ring.position.y = grp.userData.ringY + Math.sin(t / 600) * 0.03;
       for (const n of grp.userData.npcs || []) animatePerson(n, dt, false);
     }
     const rec = this.view.lobby.userData.receptionist;
     animatePerson(rec, dt, false);
-    rec.rotation.y = -Math.PI / 2 + (this.selected ? Math.sin(t / 300) * 0.25 : 0);
+    rec.rotation.y = this.selected ? Math.sin(t / 300) * 0.3 : 0;
+    this.view.setLobbyLight(night);
   }
 
   newDay(prevDay) {
@@ -817,7 +811,7 @@ export class Game {
     this.dayIncome = 0;
     if (sal) {
       this.state.money -= sal;
-      this.hooks.popup(new THREE.Vector3(DOOR_X, 2.5, 3), `-$${sal} salários`, '#ff8a80');
+      this.hooks.popup(new THREE.Vector3(8.7, 2.5, 0), `-$${sal} salários`, '#ff8a80');
     }
     this.state.stats.best = Math.max(this.state.stats.best, income);
     Sfx.day();

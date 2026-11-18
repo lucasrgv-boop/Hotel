@@ -1,10 +1,10 @@
-// Construção visual do hotel em estilo "casa de bonecas" vista de cima:
-// planta baixa com paredes cortadas, móveis arredondados e cores vivas.
+// Construção visual do hotel em estilo "casa de bonecas" visto de lado:
+// andares empilhados abertos na frente, móveis arredondados e cores vivas.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
 import {
-  FLOOR_H, WALL_H, SLOT_W, ROOM_D, CORR_HALF, CORE_W, COLS, SLOTS_PER_FLOOR, BUILDING_W,
-  BACK_Z, FRONT_Z, ELEV_X, ELEV_Z, DOOR_X, slotX0, slotRow, TIERS,
+  FLOOR_H, WALL_H, SLOT_W, ROOM_D, CORE_W, COLS, SLOTS_PER_FLOOR, BUILDING_W,
+  BACK_Z, FRONT_Z, ELEV_X, DOOR_X, slotX0, TIERS,
 } from './config.js';
 import { Tex, rep, shade, hex } from './textures.js';
 import { createPerson } from './characters.js';
@@ -110,26 +110,30 @@ const WALL_MAT = () => std(0xfbf8f2, 0.9);
 const TRIM = 0xe9e1d3;
 
 // =============== Conteúdo dos espaços (frame local) ===============
-// Frame local: x ∈ [0, SLOT_W], z ∈ [-ROOM_D, 0]; a parede da porta fica em z = 0
-// (voltada para o corredor). A porta fica em x ∈ [0.35, 1.45].
-const DOOR_L = 0.35, DOOR_R = 1.45;
+// Frame local: x ∈ [0, SLOT_W], z ∈ [-ROOM_D, 0]. A frente (z = 0) é aberta,
+// como numa casa de bonecas; o corredor fica logo à frente.
 
-function buildShell(g, { door = true, floorMat }) {
+function buildShell(g, { floorMat }) {
   floorPlane(g, 0, -ROOM_D, SLOT_W, ROOM_D, floorMat, 0.012);
   const wm = WALL_MAT();
-  // paredes laterais (meia espessura cada; a vizinha completa)
+  // paredes laterais (meia espessura cada; a vizinha completa) e parede do fundo
   box(g, 0, 0, -ROOM_D, WT / 2, WALL_H, ROOM_D, wm, false);
   box(g, SLOT_W - WT / 2, 0, -ROOM_D, WT / 2, WALL_H, ROOM_D, wm, false);
-  if (door) {
-    box(g, 0, 0, -WT, DOOR_L, WALL_H, WT, wm, false);
-    box(g, DOOR_R, 0, -WT, SLOT_W - DOOR_R, WALL_H, WT, wm, false);
-    // porta aberta (presa na dobradiça)
-    const d = rbox(g, DOOR_L + 0.02, 0, -WT - 1.02, 0.06, WALL_H - 0.05, 1.0, std(0xffffff, 0.6), 0.02);
-    d.userData.isDoor = true;
-    cyl(g, DOOR_L + 0.1, WALL_H * 0.45, -WT - 0.85, 0.035, 0.035, 0.04, std(0xd4a93a, 0.4));
-  } else {
-    box(g, 0, 0, -WT, SLOT_W, WALL_H, WT, wm, false);
-  }
+  box(g, 0, 0, -ROOM_D - WT, SLOT_W, WALL_H, WT, wm, false);
+  // rodapé e moldura frontal
+  box(g, WT / 2, 0, -ROOM_D + 0.06, SLOT_W - WT, 0.12, 0.03, std(TRIM, 0.8), false);
+  box(g, 0, WALL_H - 0.12, -0.12, SLOT_W, 0.12, 0.12, std(TRIM, 0.8), false);
+}
+
+// luminária pendente no teto
+function pendant(g, x, z, color = 0xfff1c4) {
+  const m = new THREE.MeshStandardMaterial({ color, emissive: 0x000000, roughness: 0.5 });
+  cyl(g, x, WALL_H - 0.55, z, 0.01, 0.01, 0.55, std(0x3a3340));
+  const shade = new THREE.Mesh(geoKey('pend', () => new THREE.ConeGeometry(0.28, 0.24, 16, 1, true)), std(0x3a3340, 0.6, { side: THREE.DoubleSide }));
+  shade.position.set(x, WALL_H - 0.6, z);
+  g.add(shade);
+  sphere(g, x, WALL_H - 0.7, z, 0.1, m);
+  return m;
 }
 
 function buildRoom(g, slot, num) {
@@ -204,13 +208,17 @@ function buildRoom(g, slot, num) {
   dirt.visible = false;
   g.add(dirt);
 
-  const lbl = textSprite(String(num), { bg: '#ffffff', fg: '#3a3340', size: 0.55, w: 160, h: 96, font: 'bold 58px Fredoka, Nunito, sans-serif' });
-  lbl.position.set(2.0, WALL_H + 0.3, 0);
+  const lbl = textSprite(String(num), { bg: '#ffffff', fg: '#3a3340', size: 0.5, w: 160, h: 96, font: 'bold 58px Fredoka, Nunito, sans-serif' });
+  lbl.position.set(0.75, WALL_H - 0.8, -0.1);
   g.add(lbl);
+  // quadro acima da cama e luminária
+  rbox(g, bx + bedW / 2 - 0.55, 1.45, -ROOM_D + 0.05, 1.1, 0.75, 0.06, 0xffffff, 0.02);
+  box(g, bx + bedW / 2 - 0.47, 1.52, -ROOM_D + 0.1, 0.94, 0.6, 0.01, new THREE.MeshStandardMaterial({ map: Tex.painting(num), roughness: 0.8 }), false);
+  lampMat.userData.pendant = pendant(g, 2.5, -1.4);
 
   g.userData.quilt = quilt;
   g.userData.dirt = dirt;
-  g.userData.lamps = [lampMat];
+  g.userData.lamps = [lampMat, lampMat.userData.pendant];
   g.userData.bedSpot = new THREE.Vector3(bx + bedW / 2, 0.82, bz0 + 1.85);
   g.userData.spots = [new THREE.Vector3(2.0, 0, -1.0)];
 }
@@ -330,9 +338,13 @@ function buildPool(g) {
 function buildEmpty(g) {
   floorPlane(g, 0, -ROOM_D, SLOT_W, ROOM_D, std(0xc9c4ba, 0.95), 0.012);
   const wm = std(0xdcd6cb, 0.95);
-  box(g, 0, 0, -ROOM_D, WT / 2, 0.3, ROOM_D, wm, false);
-  box(g, SLOT_W - WT / 2, 0, -ROOM_D, WT / 2, 0.3, ROOM_D, wm, false);
-  box(g, 0, 0, -WT, SLOT_W, 0.3, WT, wm, false);
+  box(g, 0, 0, -ROOM_D, WT / 2, WALL_H, ROOM_D, wm, false);
+  box(g, SLOT_W - WT / 2, 0, -ROOM_D, WT / 2, WALL_H, ROOM_D, wm, false);
+  box(g, 0, 0, -ROOM_D - WT, SLOT_W, WALL_H, WT, wm, false);
+  // andaime
+  for (const x of [0.4, 4.2]) for (const z of [-4.2, -3.4]) box(g, x, 0, z, 0.06, 2.2, 0.06, std(0xf0a43a, 0.5), false);
+  rbox(g, 0.35, 1.1, -4.3, 0.95, 0.06, 1.0, 0xc8935c, 0.02);
+  rbox(g, 4.15, 1.1, -4.3, 0.95 - 0.5, 0.06, 1.0, 0xc8935c, 0.02);
   // fita de obra e cones
   const tape = std(0xf5c518, 0.6);
   for (const [x, z] of [[0.5, -0.5], [4.5, -0.5], [4.5, -4.0], [0.5, -4.0]]) {
@@ -347,120 +359,100 @@ function buildEmpty(g) {
   rbox(g, 1.0, 0, -2.6, 1.4, 0.1, 0.35, 0xd9a46c, 0.02);
   rbox(g, 1.1, 0.1, -2.5, 1.3, 0.1, 0.35, 0xc8935c, 0.02);
   const plus = textSprite('+ Construir', { bg: '#ffd34d', fg: '#3a3340', size: 0.6, w: 320, h: 96, font: 'bold 50px Fredoka, Nunito, sans-serif' });
-  plus.position.set(SLOT_W / 2, 1.0, -ROOM_D / 2);
+  plus.position.set(SLOT_W / 2, 1.4, -1.6);
   g.add(plus);
   g.userData.plus = plus;
 }
 
-// =============== Lobby (térreo, frente, colunas 0 e 1) ===============
+
+// =============== Lobby (térreo, espaços 0 e 1) ===============
 function buildLobby(parent) {
   const g = new THREE.Group();
   const x0 = CORE_W, x1 = CORE_W + SLOT_W * 2;
-  const z0 = CORR_HALF, z1 = FRONT_Z;
-  floorPlane(g, x0, z0, x1 - x0, z1 - z0, texMat(Tex.tiles(0xf3e6cf, 0xe0a678, 4), 5, 2.25), 0.012);
+  floorPlane(g, x0, -ROOM_D, x1 - x0, ROOM_D + FRONT_Z, texMat(Tex.tiles(0xf3e6cf, 0xe0a678, 4), 5, 3.1), 0.012);
   const wm = WALL_MAT();
-  // pilares que separam do corredor
-  for (const x of [x0 + 0.1, x1 - 0.35]) rbox(g, x, 0, z0 - 0.12, 0.3, WALL_H + 0.3, 0.3, wm, 0.03);
-  // balcão da recepção
+  box(g, x0, 0, -ROOM_D - WT, x1 - x0, WALL_H, WT, wm, false);
+  box(g, x0 + WT / 2, 0, -ROOM_D, x1 - x0 - WT, WALL_H, 0.06, std(0xf6e2c4, 0.9), false);
+  box(g, x0 + WT / 2, 0.0, -ROOM_D + 0.06, x1 - x0 - WT, 0.9, 0.04, std(0xc8935c, 0.8), false); // lambri
+  box(g, x0, WALL_H - 0.12, -0.12, x1 - x0, 0.12, 0.12, std(TRIM, 0.8), false);
+  box(g, x1 - WT / 2, 0, -ROOM_D, WT / 2, WALL_H, ROOM_D, wm, false);
+  // balcão da recepção (de frente para a rua)
   const desk = 0x8a5530;
-  rbox(g, 11.4, 0, 2.0, 0.65, 1.0, 3.0, desk, 0.05);
-  rbox(g, 11.3, 1.0, 1.95, 0.85, 0.08, 3.1, std(0xf6f1e6, 0.35), 0.03);
-  for (let k = 0; k < 3; k++) rbox(g, 11.37, 0.2, 2.25 + k * 0.95, 0.02, 0.6, 0.7, 0xa86d43, 0.01);
-  // computador, campainha, livro
-  rbox(g, 11.85, 1.08, 3.0, 0.08, 0.4, 0.55, 0x2a2a30, 0.02);
-  box(g, 11.8, 1.13, 3.04, 0.01, 0.3, 0.47, new THREE.MeshStandardMaterial({ color: 0x6fd3ff, emissive: 0x1a5a7a, roughness: 0.3 }), false);
+  rbox(g, 7.0, 0, -2.75, 3.4, 1.0, 0.65, desk, 0.05);
+  rbox(g, 6.95, 1.0, -2.85, 3.5, 0.08, 0.85, std(0xf6f1e6, 0.35), 0.03);
+  for (let k = 0; k < 3; k++) rbox(g, 7.25 + k * 1.05, 0.2, -2.12, 0.85, 0.6, 0.02, 0xa86d43, 0.01);
+  rbox(g, 9.3, 1.08, -2.75, 0.55, 0.4, 0.08, 0x2a2a30, 0.02);
+  box(g, 9.34, 1.13, -2.66, 0.47, 0.3, 0.01, new THREE.MeshStandardMaterial({ color: 0x6fd3ff, emissive: 0x1a5a7a, roughness: 0.3 }), false);
   const bell = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), std(0xf0b323, 0.25, { metalness: 0.6 }));
-  bell.position.set(11.6, 1.08, 2.3); g.add(bell);
-  rbox(g, 11.5, 1.08, 4.2, 0.35, 0.05, 0.45, 0x34507a, 0.02);
-  // estante de chaves atrás
-  rbox(g, 13.4, 0, 2.0, 0.45, 1.15, 3.0, desk, 0.04);
-  for (let k = 0; k < 6; k++) cyl(g, 13.42, 1.15, 2.3 + k * 0.48, 0.07, 0.07, 0.12, std([0xd9473b, 0x4f9bd9, 0x6cbf4a, 0xf0b323, 0xa267d6, 0xe58fb8][k], 0.5));
+  bell.position.set(7.5, 1.08, -2.4); g.add(bell);
+  rbox(g, 8.2, 1.08, -2.55, 0.45, 0.05, 0.35, 0x34507a, 0.02);
+  // quadro de chaves e placa na parede
+  rbox(g, 7.4, 1.35, -ROOM_D + 0.06, 2.6, 1.1, 0.08, desk, 0.03);
+  for (let k = 0; k < 12; k++) cyl(g, 7.65 + (k % 6) * 0.42, 1.5 + Math.floor(k / 6) * 0.45, -ROOM_D + 0.16, 0.06, 0.06, 0.12, std([0xd9473b, 0x4f9bd9, 0x6cbf4a, 0xf0b323, 0xa267d6, 0xe58fb8][k % 6], 0.5));
+  const sign = textSprite('Recepção', { bg: '#8a5530', fg: '#fff3c4', size: 0.45, w: 300, h: 96, font: 'bold 54px Fredoka, Nunito, sans-serif' });
+  sign.position.set(8.7, 2.7, -ROOM_D + 0.3);
+  g.add(sign);
   // recepcionista
   const me = createPerson({ shirt: 0x8b1e3f, pants: 0x2a2a30, hair: 0x3a2416, hairStyle: 1 });
-  me.position.set(12.7, 0, 3.4);
-  me.rotation.y = -Math.PI / 2;
+  me.position.set(8.7, 0, -3.35);
   g.add(me);
-  // portas de vidro e capacho
-  rbox(g, DOOR_X - 1.1, 0.012, FRONT_Z - 1.0, 2.2, 0.02, 0.85, 0x8b1e3f, 0.01);
-  const glass = new THREE.MeshStandardMaterial({ color: 0xbfe6f7, transparent: true, opacity: 0.35, roughness: 0.05, depthWrite: false });
-  for (const s of [-1, 1]) { // portas de correr meio abertas
-    box(g, DOOR_X + (s < 0 ? -0.98 : 0.43), 0, FRONT_Z - 0.02, 0.55, WALL_H, 0.05, glass, false);
-  }
+  // tapete de entrada e luminárias
+  rbox(g, DOOR_X - 1.0, 0.012, 0.0, 2.0, 0.02, 1.3, 0x8b1e3f, 0.01);
+  const lamps = [pendant(g, 5.5, -1.6), pendant(g, 11.0, -1.6)];
 
   // decoração nível 1: plantas, tapete, bebedouro
   const decor1 = new THREE.Group();
-  plant(decor1, x0 + 0.5, z1 - 0.5, 1.2);
-  plant(decor1, 10.6, z1 - 0.5, 1.2);
-  plant(decor1, x0 + 0.5, z0 + 0.6, 1.0);
-  rbox(decor1, 5.0, 0.012, 3.9, 2.8, 0.02, 1.5, 0x4f9bd9, 0.01);
-  cyl(decor1, 7.6, 0, 1.75, 0.16, 0.16, 0.8, std(0xffffff, 0.5));
-  cyl(decor1, 7.6, 0.8, 1.75, 0.13, 0.13, 0.3, std(0x9fd8f0, 0.2, { transparent: true, opacity: 0.8 }));
-  // decoração nível 2: sofás, mesinha e lustre
+  plant(decor1, x0 + 0.5, -ROOM_D + 0.5, 1.3);
+  plant(decor1, x1 - 0.5, -ROOM_D + 0.5, 1.3);
+  plant(decor1, 6.5, -2.4, 1.0);
+  rbox(decor1, 4.0, 0.012, -1.6, 2.6, 0.02, 1.3, 0x4f9bd9, 0.01);
+  cyl(decor1, 11.4, 0, -3.6, 0.16, 0.16, 0.8, std(0xffffff, 0.5));
+  cyl(decor1, 11.4, 0.8, -3.6, 0.13, 0.13, 0.3, std(0x9fd8f0, 0.2, { transparent: true, opacity: 0.8 }));
+  // decoração nível 2: sofá, mesinha, poltrona e lustre
   const decor2 = new THREE.Group();
   const sofa = 0xd98a4a;
-  rbox(decor2, 4.7, 0, 4.7, 2.4, 0.42, 0.75, sofa, 0.12);
-  rbox(decor2, 4.7, 0.3, 5.25, 2.4, 0.5, 0.22, sofa, 0.1);
-  for (const x of [4.6, 7.0]) rbox(decor2, x, 0, 4.7, 0.22, 0.6, 0.75, sofa, 0.1);
-  for (let k = 0; k < 3; k++) rbox(decor2, 4.95 + k * 0.72, 0.42, 4.75, 0.62, 0.14, 0.55, std(shade(sofa, 1.1)), 0.07);
-  cyl(decor2, 5.9, 0, 3.9, 0.45, 0.45, 0.35, 0x8a5530, 24);
-  plant(decor2, 5.9, 3.9, 0.45, 0xffffff);
-  rbox(decor2, 4.6, 0, 2.2, 0.75, 0.42, 0.75, 0x6cbf4a, 0.12);
-  rbox(decor2, 4.6, 0.3, 2.2, 0.2, 0.45, 0.75, 0x6cbf4a, 0.08);
+  rbox(decor2, 3.6, 0, -3.7, 2.4, 0.42, 0.75, sofa, 0.12);
+  rbox(decor2, 3.6, 0.3, -3.95, 2.4, 0.5, 0.22, sofa, 0.1);
+  for (const x of [3.5, 5.9]) rbox(decor2, x, 0, -3.95, 0.22, 0.6, 1.0, sofa, 0.1);
+  for (let k = 0; k < 3; k++) rbox(decor2, 3.85 + k * 0.72, 0.42, -3.6, 0.62, 0.14, 0.55, std(shade(sofa, 1.1)), 0.07);
+  cyl(decor2, 4.8, 0, -2.3, 0.45, 0.45, 0.35, 0x8a5530, 24);
+  plant(decor2, 4.8, -2.3, 0.45, 0xffffff);
+  rbox(decor2, 11.6, 0, -2.6, 0.75, 0.42, 0.75, 0x6cbf4a, 0.12);
+  rbox(decor2, 12.15, 0.3, -2.6, 0.2, 0.45, 0.75, 0x6cbf4a, 0.08);
+  const chand = new THREE.MeshStandardMaterial({ color: 0xfff1c4, emissive: 0x665522, roughness: 0.3 });
+  sphere(decor2, 8.0, WALL_H - 0.75, -1.0, 0.3, chand, 1, 0.7, 1);
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; sphere(decor2, 8.0 + Math.cos(a) * 0.45, WALL_H - 0.8, -1.0 + Math.sin(a) * 0.45, 0.08, chand); }
+  cyl(decor2, 8.0, WALL_H - 0.6, -1.0, 0.015, 0.015, 0.6, std(0xd4a93a, 0.4));
   decor1.visible = false; decor2.visible = false;
   g.add(decor1, decor2);
 
   g.userData.decor = [decor1, decor2];
   g.userData.receptionist = me;
+  g.userData.lamps = lamps;
   parent.add(g);
   return g;
 }
 
-// =============== Núcleo: elevador (trás) e escada/área dos funcionários (frente) ===============
+// =============== Poço do elevador (um trecho por andar) ===============
 function buildCore(parent, f) {
   const g = new THREE.Group();
-  const wm = WALL_MAT();
-  // elevador
-  floorPlane(g, 0, BACK_Z, CORE_W, ROOM_D, std(0x8a8f99, 0.6), 0.012);
-  box(g, CORE_W - WT / 2, 0, BACK_Z, WT / 2, WALL_H, ROOM_D, wm, false);
-  box(g, 0.6, 0, ELEV_Z - 1.2, WT, WALL_H + 0.6, 2.4, std(0xc0c6cc, 0.4, { metalness: 0.4 }), false);
-  box(g, 3.26, 0, ELEV_Z - 1.2, WT, WALL_H + 0.6, 2.4, std(0xc0c6cc, 0.4, { metalness: 0.4 }), false);
-  box(g, 0.6, 0, ELEV_Z - 1.25, 2.8, WALL_H + 0.6, WT, std(0xa0a6ac, 0.4, { metalness: 0.4 }), false);
-  floorPlane(g, 0.74, ELEV_Z - 1.1, 2.52, 2.2, std(0x5a5f68, 0.4), 0.02);
-  // portas do elevador (abertas pela metade) e moldura
-  const steel = std(0xd7dce2, 0.25, { metalness: 0.7 });
-  box(g, 0.0, 0, -CORR_HALF - WT, 0.9, WALL_H + 0.6, WT, wm, false);
-  box(g, 3.1, 0, -CORR_HALF - WT, CORE_W - 3.1, WALL_H + 0.6, WT, wm, false);
-  box(g, 0.9, 0, -CORR_HALF - WT - 0.04, 0.45, WALL_H + 0.5, 0.06, steel, false);
-  box(g, 2.65, 0, -CORR_HALF - WT - 0.04, 0.45, WALL_H + 0.5, 0.06, steel, false);
-  box(g, 0.85, WALL_H + 0.5, -CORR_HALF - WT - 0.05, 2.3, 0.12, 0.08, std(0x3a3340), false);
-  const ind = new THREE.Mesh(bgeo(0.5, 0.08, 0.02), new THREE.MeshBasicMaterial({ color: 0xffb44d }));
-  ind.position.set(ELEV_X, WALL_H + 0.56, -CORR_HALF - WT + 0.01);
-  g.add(ind);
-  cyl(g, 3.3, 0.6, -CORR_HALF + 0.03, 0.05, 0.05, 0.03, std(0x3a3340)).rotation.x = Math.PI / 2;
-  const lbl = textSprite(f === 0 ? 'T' : `${f}º`, { bg: '#3a3340', fg: '#ffd34d', size: 0.38, w: 120, h: 96, font: 'bold 56px Fredoka, Nunito, sans-serif' });
-  lbl.position.set(ELEV_X, WALL_H + 0.95, -CORR_HALF);
+  floorPlane(g, 0, -ROOM_D, CORE_W, ROOM_D + FRONT_Z, std(0xb9bec6, 0.6), 0.012);
+  box(g, 0, 0, -ROOM_D - WT, CORE_W, WALL_H, WT, std(0x8a90a0, 0.5), false);
+  box(g, CORE_W - WT / 2, 0, -ROOM_D, WT / 2, WALL_H, ROOM_D, WALL_MAT(), false);
+  // trilhos e cabos
+  const steel = std(0xc8ced6, 0.3, { metalness: 0.6 });
+  for (const x of [0.35, CORE_W - 0.45]) box(g, x, 0, -3.3, 0.1, FLOOR_H, 0.1, steel, false);
+  for (const x of [1.2, 1.8]) cyl(g, x, 0, -3.0, 0.015, 0.015, FLOOR_H, std(0x3a3340, 0.5));
+  // moldura de vidro na frente do poço
+  const glass = new THREE.MeshStandardMaterial({ color: 0xcfeefc, transparent: true, opacity: 0.22, roughness: 0.05, depthWrite: false });
+  const fr = box(g, 0.25, 0.05, -0.55, CORE_W - 0.5, WALL_H - 0.15, 0.04, glass, false);
+  fr.renderOrder = 2;
+  box(g, 0.15, 0, -0.6, 0.12, WALL_H, 0.14, steel, false);
+  box(g, CORE_W - 0.27, 0, -0.6, 0.12, WALL_H, 0.14, steel, false);
+  box(g, 0.15, WALL_H - 0.2, -0.6, CORE_W - 0.3, 0.2, 0.14, steel, false);
+  const lbl = textSprite(f === 0 ? 'T' : `${f}º`, { bg: '#3a3340', fg: '#ffd34d', size: 0.42, w: 120, h: 96, font: 'bold 56px Fredoka, Nunito, sans-serif' });
+  lbl.position.set(ELEV_X, WALL_H - 0.45, 0.0);
   g.add(lbl);
-
-  // frente: área dos funcionários no térreo, escada nos demais
-  floorPlane(g, 0, CORR_HALF, CORE_W, ROOM_D, texMat(Tex.wood(0xc8935c), 1.8, 2), 0.012);
-  box(g, CORE_W - WT / 2, 0, CORR_HALF, WT / 2, WALL_H, ROOM_D, wm, false);
-  if (f === 0) {
-    for (let k = 0; k < 4; k++) rbox(g, 0.15, 0, 2.0 + k * 0.62, 0.5, 1.6, 0.58, [0x4f9bd9, 0x6cbf4a, 0xf0b323, 0xd9473b][k], 0.03);
-    // carrinho de limpeza
-    rbox(g, 2.6, 0.15, 4.6, 1.0, 0.6, 0.5, 0x4f9bd9, 0.05);
-    cyl(g, 2.75, 0.75, 4.85, 0.12, 0.12, 0.25, 0xf0b323);
-    rbox(g, 3.1, 0.75, 4.7, 0.4, 0.2, 0.3, 0xffffff, 0.06);
-    for (const [x, z] of [[2.7, 4.65], [3.5, 4.65], [2.7, 5.05], [3.5, 5.05]]) sphere(g, x, 0.07, z, 0.07, std(0x222222));
-    const sign = textSprite('Equipe', { bg: '#ffffff', fg: '#3a3340', size: 0.36, w: 220, h: 96, font: 'bold 50px Fredoka, Nunito, sans-serif' });
-    sign.position.set(2, WALL_H + 0.3, CORR_HALF + 0.2);
-    g.add(sign);
-  } else {
-    // escada
-    for (let k = 0; k < 9; k++) {
-      rbox(g, 0.4 + k * 0.36, k * 0.18, 4.1, 0.38, 0.18 + 0.001, 1.3, k % 2 ? 0xe9dfcc : 0xf6f1e6, 0.02);
-    }
-    box(g, 0.4, 0, 4.0, 3.3, 0.9 + 1.6, 0.06, std(0x8a5530), false).scale.set(1, 0.4, 1);
-  }
   parent.add(g);
   return g;
 }
@@ -524,51 +516,36 @@ function car(p, x, z, color) {
   return g;
 }
 
+
 export function buildEnvironment(scene) {
   const g = new THREE.Group();
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 200), new THREE.MeshStandardMaterial({ map: rep(Tex.grass(), 60, 46), roughness: 1 }));
-  ground.rotation.x = -Math.PI / 2; ground.position.set(W / 2, -0.32, 20); ground.receiveShadow = true;
+  ground.rotation.x = -Math.PI / 2; ground.position.set(W / 2, -0.32, 0); ground.receiveShadow = true;
   g.add(ground);
-  // calçada, rua e calçada oposta
-  const sw = new THREE.MeshStandardMaterial({ map: rep(Tex.cobble(), 80, 1), roughness: 0.95 });
-  box(g, -100, -0.32, FRONT_Z + 1.9, 240, 0.3, 2.1, sw, false);
-  box(g, -100, -0.4, FRONT_Z + 4.0, 240, 0.3, 5.6, new THREE.MeshStandardMaterial({ map: rep(Tex.asphalt(), 60, 2), roughness: 1 }), false);
-  for (let x = -98; x < 140; x += 3) box(g, x, -0.09, FRONT_Z + 6.72, 1.6, 0.02, 0.16, std(0xffffff, 0.8), false);
-  box(g, -100, -0.32, FRONT_Z + 9.6, 240, 0.3, 2.0, sw, false);
-  // meio-fio
-  box(g, -100, -0.32, FRONT_Z + 3.95, 240, 0.32, 0.12, std(0xe6e2da), false);
-  // caminho de entrada
-  const path = new THREE.MeshStandardMaterial({ map: rep(Tex.cobble(), 1, 1), roughness: 0.95 });
-  box(g, DOOR_X - 1.1, -0.31, FRONT_Z + 0.3, 2.2, 0.3, 1.6, path, false);
-  // canteiros e bancos da entrada
-  for (const s of [-1, 1]) {
-    const cx = DOOR_X + s * 2.6;
-    box(g, cx - 1.3, -0.3, FRONT_Z + 0.35, 2.6, 0.4, 1.4, std(0x7a5a3a, 0.95), false);
-    bush(g, cx - 0.6, FRONT_Z + 1.0, 0.8, 0xffffff);
-    bush(g, cx + 0.6, FRONT_Z + 1.0, 0.8, 0xef4b5c);
+  // calçada, meio-fio, rua e calçada oposta
+  const sw = new THREE.MeshStandardMaterial({ map: rep(Tex.cobble(), 80, 1.5), roughness: 0.95 });
+  box(g, -100, -0.32, FRONT_Z, 240, 0.3, 3.4, sw, false);
+  box(g, -100, -0.32, FRONT_Z + 3.35, 240, 0.32, 0.14, std(0xe6e2da), false);
+  box(g, -100, -0.4, FRONT_Z + 3.5, 240, 0.3, 5.6, new THREE.MeshStandardMaterial({ map: rep(Tex.asphalt(), 60, 2), roughness: 1 }), false);
+  for (let x = -98; x < 140; x += 3) box(g, x, -0.09, FRONT_Z + 6.2, 1.6, 0.02, 0.16, std(0xffffff, 0.8), false);
+  box(g, -100, -0.32, FRONT_Z + 9.1, 240, 0.3, 2.4, sw, false);
+  // canteiros baixos ao lado da entrada
+  for (const x of [DOOR_X - 2.2, DOOR_X + 2.2]) {
+    rbox(g, x - 0.7, -0.3, FRONT_Z + 0.25, 1.4, 0.55, 0.6, std(0xd9cfc0, 0.9), 0.06);
+    bush(g, x - 0.3, FRONT_Z + 0.55, 0.55, 0xef4b5c);
+    bush(g, x + 0.3, FRONT_Z + 0.55, 0.55, 0xffffff);
   }
-  for (const x of [1.5, 16.5, 21.5]) bush(g, x, FRONT_Z + 1.0, 1, [0xffd34d, 0xe58fb8, 0xffffff][Math.floor(x) % 3]);
-  bench(g, 19.0, FRONT_Z + 1.3, 0);
-  // placa HOTEL no jardim
-  const sign = new THREE.Group();
-  rbox(sign, -1.6, 0, -0.2, 3.2, 0.9, 0.4, 0xf6f1e6, 0.08);
-  rbox(sign, -1.7, 0.85, -0.25, 3.4, 0.12, 0.5, 0xc96a4a, 0.04);
-  const neonMats = [];
-  const s1 = textSprite('HOTEL', { bg: '#c96a4a', fg: '#fff3c4', size: 0.75, w: 300, h: 110, font: 'bold 76px Fredoka, Nunito, sans-serif' });
-  s1.position.set(0, 1.45, 0);
-  sign.add(s1);
-  sign.position.set(14.0 + 1.5, -0.3, FRONT_Z + 1.2);
-  g.add(sign);
-  // árvores e palmeiras ao redor
-  for (const [x, z, s] of [[-3, -4, 1.3], [-4.5, 1, 1.1], [-3.5, 5, 1], [W + 3, -3, 1.2], [W + 4.5, 2.5, 1.4], [W + 3, 6, 0.9], [4, -9, 1.5], [12, -9.5, 1.3], [20, -9, 1.6], [-8, -6, 1.4], [W + 9, -6, 1.5]]) tree(g, x, z, s);
-  palm(g, -2.2, FRONT_Z + 1.2, 1.1);
-  palm(g, W + 2, FRONT_Z + 1.0, 1.2);
+  bench(g, W - 3, FRONT_Z + 2.6, Math.PI);
+  // árvores e palmeiras nas laterais e atrás
+  for (const [x, z, s] of [[-3.5, -3, 1.4], [-6, 0.5, 1.1], [-9, -5, 1.5], [W + 3.5, -3, 1.3], [W + 6, 0.5, 1.2], [W + 9, -5, 1.6], [6, -9, 1.6], [16, -10, 1.8], [27, -9, 1.6]]) tree(g, x, z, s);
+  palm(g, -2.0, FRONT_Z + 0.9, 1.2);
+  palm(g, W + 2.0, FRONT_Z + 0.9, 1.3);
   const lamps = [];
-  for (let x = -14; x < W + 16; x += 8) lampPost(g, x, FRONT_Z + 10.3, lamps);
-  const cars = [car(g, -30, FRONT_Z + 5.5, 0xef4b5c), car(g, 40, FRONT_Z + 8.0, 0x4f9bd9)];
+  for (let x = -14; x < W + 16; x += 8) lampPost(g, x, FRONT_Z + 10.1, lamps);
+  const cars = [car(g, -30, FRONT_Z + 5.0, 0xef4b5c), car(g, 40, FRONT_Z + 7.5, 0x4f9bd9)];
   cars[1].rotation.y = Math.PI;
   scene.add(g);
-  return { group: g, lamps, cars, neonMats };
+  return { group: g, lamps, cars };
 }
 
 // =============== Classe principal ===============
@@ -577,7 +554,8 @@ export class HotelView {
     this.scene = scene;
     this.root = new THREE.Group();
     scene.add(this.root);
-    this.floorGroups = [];   // por andar: { group, facade, slots: Group }
+    this.floorGroups = [];
+    this.roof = null;
     this.slotGroups = new Map();
     this.slotKeys = new Map();
     this.hitboxes = [];
@@ -585,96 +563,91 @@ export class HotelView {
     this.viewFloor = 0;
     this.lobby = null;
     this.decorLevel = 0;
-    // destaque do espaço sob o mouse
-    this.hoverMat = new THREE.MeshBasicMaterial({ color: 0x8ee07a, transparent: true, opacity: 0.32, depthWrite: false });
-    this.hoverBox = new THREE.Mesh(new THREE.PlaneGeometry(SLOT_W - 0.2, ROOM_D - 0.2), this.hoverMat);
-    this.hoverBox.rotation.x = -Math.PI / 2;
-    this.hoverBox.renderOrder = 3;
+    // destaque do espaço sob o mouse: piso colorido + contorno
+    this.hoverMat = new THREE.MeshBasicMaterial({ color: 0x8ee07a, transparent: true, opacity: 0.35, depthWrite: false });
+    this.hoverBox = new THREE.Group();
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(SLOT_W - 0.2, ROOM_D - 0.2), this.hoverMat);
+    pl.rotation.x = -Math.PI / 2; pl.position.y = 0.05; pl.renderOrder = 3;
+    this.hoverEdges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(SLOT_W - 0.1, WALL_H - 0.05, ROOM_D + FRONT_Z - 0.1)), new THREE.LineBasicMaterial({ color: 0x8ee07a }));
+    this.hoverEdges.position.set(0, (WALL_H - 0.05) / 2, (FRONT_Z) / 2);
+    this.hoverBox.add(pl, this.hoverEdges);
     this.hoverBox.visible = false;
     scene.add(this.hoverBox);
-    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(SLOT_W - 0.2, ROOM_D - 0.2)), new THREE.LineBasicMaterial({ color: 0xffffff }));
-    this.hoverBox.add(edge);
   }
 
   // ---------- andares ----------
   setFloors(n) {
-    while (this.floorGroups.length > n) {
-      const fg = this.floorGroups.pop();
-      this.root.remove(fg.group);
-    }
+    while (this.floorGroups.length > n) this.root.remove(this.floorGroups.pop().group);
     while (this.floorGroups.length < n) this.floorGroups.push(this._buildFloor(this.floorGroups.length));
     this.floors = n;
-    this.setViewFloor(Math.min(this.viewFloor, n - 1));
+    this._buildShellAndRoof(n);
   }
 
   _buildFloor(f) {
     const group = new THREE.Group();
     group.position.y = f * FLOOR_H;
-    const wm = WALL_MAT();
-    // laje
-    rbox(group, -0.25, -0.32, BACK_Z - 0.25, W + 0.5, 0.32, FRONT_Z - BACK_Z + 0.5, std(0xf1ebe0, 0.9), 0.06);
-    // corredor (madeira)
-    floorPlane(group, 0, -CORR_HALF, W, CORR_HALF * 2, texMat(Tex.wood(0xc8935c), 12, 1.2), 0.012);
-    rbox(group, CORE_W + 0.4, 0.013, -0.5, W - CORE_W - 0.8, 0.012, 1.0, f === 0 ? 0x8b1e3f : 0x34507a, 0.005);
-    // paredes externas
-    box(group, -WT, 0, BACK_Z - WT, W + WT * 2, WALL_H + 0.5, WT, wm, false);   // fundos (um pouco mais alta)
-    box(group, -WT, 0, BACK_Z, WT, WALL_H, FRONT_Z - BACK_Z, wm, false);        // esquerda
-    box(group, W, 0, BACK_Z, WT, WALL_H, FRONT_Z - BACK_Z, wm, false);          // direita
-    if (f === 0) { // fachada do térreo com vão da porta
-      box(group, -WT, 0, FRONT_Z, DOOR_X - 1.0 + WT, WALL_H, WT, wm, false);
-      box(group, DOOR_X + 1.0, 0, FRONT_Z, W - DOOR_X - 1.0 + WT, WALL_H, WT, wm, false);
-    } else {
-      box(group, -WT, 0, FRONT_Z, W + WT * 2, WALL_H, WT, wm, false);
+    // laje (piso deste andar), com a borda da frente aparente
+    rbox(group, -0.25, -0.3, BACK_Z - 0.3, W + 0.5, 0.3, FRONT_Z - BACK_Z + 0.4, std(0xf1ebe0, 0.9), 0.05);
+    box(group, -0.25, -0.3, FRONT_Z + 0.06, W + 0.5, 0.3, 0.06, std(0xe2d6c4, 0.9), false);
+    // corredor
+    const cx0 = f === 0 ? CORE_W + 2 * SLOT_W : CORE_W;
+    floorPlane(group, cx0, 0, W - cx0, FRONT_Z, texMat(Tex.wood(0xc8935c), (W - cx0) / 2.5, 0.8), 0.012);
+    rbox(group, cx0 + 0.3, 0.013, 0.45, W - cx0 - 0.6, 0.012, 0.8, f === 0 ? 0x8b1e3f : 0x34507a, 0.005);
+    if (f > 0) { // guarda-corpo de vidro
+      const glass = new THREE.MeshStandardMaterial({ color: 0xcfeefc, transparent: true, opacity: 0.25, roughness: 0.05, depthWrite: false });
+      const r = box(group, 0, 0, FRONT_Z - 0.06, W, 0.85, 0.04, glass, false);
+      r.renderOrder = 2;
+      rbox(group, 0, 0.85, FRONT_Z - 0.09, W, 0.06, 0.1, std(0xd4a93a, 0.35, { metalness: 0.5 }), 0.03);
+      for (let x = 0; x <= W; x += SLOT_W) box(group, Math.min(x, W - 0.06), 0, FRONT_Z - 0.08, 0.06, 0.85, 0.06, std(0xd4a93a, 0.35, { metalness: 0.5 }), false);
     }
-    // acabamento no topo das paredes externas
-    for (const [x, z, w, d] of [[-WT, FRONT_Z, W + 2 * WT, WT], [-WT, BACK_Z, WT, FRONT_Z - BACK_Z], [W, BACK_Z, WT, FRONT_Z - BACK_Z]]) {
-      box(group, x - 0.02, WALL_H, z - 0.02, w + 0.04, 0.04, d + 0.04, std(TRIM, 0.8), false);
-    }
-
-    // casca da fachada (visível quando o andar está abaixo do andar visto)
-    const facade = new THREE.Group();
-    const fm = texMat(Tex.facade(), 8, 1, 0xffffff, 0.9);
-    const fmSide = texMat(Tex.facade(), 4, 1, 0xffffff, 0.9);
-    box(facade, -WT - 0.02, 0, FRONT_Z - 0.02, W + 2 * WT + 0.04, FRONT_Z > 0 ? FLOOR_H - 0.32 : 1, WT + 0.05, fm, false);
-    box(facade, -WT - 0.04, 0, BACK_Z - WT, WT + 0.05, FLOOR_H - 0.32, FRONT_Z - BACK_Z + WT, fmSide, false);
-    box(facade, W - 0.01, 0, BACK_Z - WT, WT + 0.05, FLOOR_H - 0.32, FRONT_Z - BACK_Z + WT, fmSide, false);
-    box(facade, -WT, 0, BACK_Z - WT - 0.02, W + 2 * WT, FLOOR_H - 0.32, WT, std(0xf4efe6, 0.9), false);
-    if (f === 0) { // toldo sobre a porta quando visto de cima
-      rbox(facade, DOOR_X - 1.4, WALL_H + 0.3, FRONT_Z, 2.8, 0.1, 1.0, 0x8b1e3f, 0.03);
-      box(facade, DOOR_X - 0.9, 0, FRONT_Z + 0.05, 1.8, 1.9, 0.02, std(0x3f8fc9, 0.2), false);
-    }
-    facade.visible = false;
-    group.add(facade);
-
     buildCore(group, f);
     if (f === 0) this.lobby = buildLobby(group);
     const slots = new THREE.Group();
     group.add(slots);
     this.root.add(group);
     group.updateMatrixWorld(true);
-    return { group, facade, slots };
+    return { group, slots };
   }
 
-  setViewFloor(vf) {
-    this.viewFloor = vf;
-    this.floorGroups.forEach((fg, f) => {
-      fg.group.visible = f <= vf;
-      fg.facade.visible = f < vf;
-      fg.slots.visible = f === vf;
-      // núcleo/lobby só no andar visto
-      fg.group.children.forEach((c) => { if (c !== fg.facade && c !== fg.slots && c.type === 'Group') c.visible = f === vf; });
-    });
-    this.hoverBox.visible = false;
+  // paredes externas laterais, telhado e letreiro (dependem do número de andares)
+  _buildShellAndRoof(n) {
+    if (this.roof) this.root.remove(this.roof);
+    const s = new THREE.Group();
+    const H = n * FLOOR_H;
+    const side = texMat(Tex.facade(), (ROOM_D + FRONT_Z) / 3, n, 0xffffff, 0.9);
+    box(s, -0.45, -0.3, BACK_Z - 0.35, 0.45, H + 0.3, FRONT_Z - BACK_Z + 0.35, side);
+    box(s, W, -0.3, BACK_Z - 0.35, 0.45, H + 0.3, FRONT_Z - BACK_Z + 0.35, side);
+    box(s, -0.45, -0.3, BACK_Z - 0.5, W + 0.9, H + 0.3, 0.2, std(0xf4efe6, 0.9), false);
+    // colunas da frente
+    for (const x of [-0.5, W - 0.05]) rbox(s, x, -0.3, FRONT_Z - 0.25, 0.55, H + 0.3, 0.55, std(0xf6f1e6, 0.8), 0.05);
+    // telhado
+    rbox(s, -0.7, H - 0.3, BACK_Z - 0.6, W + 1.4, 0.4, FRONT_Z - BACK_Z + 1.0, std(0xc96a4a, 0.8), 0.06);
+    rbox(s, -0.7, H + 0.1, FRONT_Z + 0.1, W + 1.4, 0.35, 0.3, std(0xf6f1e6, 0.8), 0.05);
+    rbox(s, W - 5, H + 0.1, -3.6, 1.8, 1.4, 1.8, std(0x9aa0a8, 0.6), 0.1);
+    rbox(s, 3, H + 0.1, -3.2, 3.0, 0.5, 1.2, std(0xa0a6ac, 0.6), 0.05); // ar-condicionado
+    // letreiro HOTEL
+    const board = new THREE.Group();
+    rbox(board, -3.2, 0, -0.15, 6.4, 1.4, 0.3, std(0xc96a4a, 0.7), 0.12);
+    rbox(board, -3.0, 0.15, 0.1, 6.0, 1.1, 0.06, std(0xfff3c4, 0.7), 0.05);
+    // placa plana (não sprite) para não atravessar o painel
+    const sp = textSprite('HOTEL PARAÍSO', { bg: '#fff3c4', fg: '#c96a4a', size: 1.0, w: 560, h: 96, font: 'bold 58px Fredoka, Nunito, sans-serif' });
+    const t = new THREE.Mesh(new THREE.PlaneGeometry(sp.scale.x, sp.scale.y), new THREE.MeshBasicMaterial({ map: sp.material.map, transparent: true }));
+    t.position.set(0, 0.72, 0.17);
+    board.add(t);
+    for (const x of [-2.4, 2.4]) box(board, x, -0.6, -0.1, 0.12, 0.6, 0.12, std(0x3a3340), false);
+    board.position.set(W / 2, H + 0.75, -0.6);
+    s.add(board);
+    // toldo da entrada
+    rbox(s, DOOR_X - 1.3, WALL_H - 0.35, FRONT_Z - 0.1, 2.6, 0.12, 1.4, 0x8b1e3f, 0.04);
+    for (const x of [DOOR_X - 1.2, DOOR_X + 1.1]) cyl(s, x, -0.3, FRONT_Z + 1.15, 0.04, 0.04, WALL_H + 0.0, std(0xd4a93a, 0.35, { metalness: 0.5 }), 10);
+    this.roof = s;
+    this.root.add(s);
   }
+
+  setViewFloor() { /* todos os andares ficam visíveis */ }
 
   // ---------- espaços ----------
   slotKey(f, i) { return `${f}_${i}`; }
-
-  _placeSlotGroup(g, i) {
-    const x0 = slotX0(i);
-    if (slotRow(i) === 0) { g.position.set(x0, 0, -CORR_HALF); g.rotation.y = 0; }
-    else { g.position.set(x0 + SLOT_W, 0, CORR_HALF); g.rotation.y = Math.PI; }
-  }
 
   syncSlot(f, i, slot) {
     const key = this.slotKey(f, i);
@@ -687,14 +660,14 @@ export class HotelView {
       this.hitboxes = this.hitboxes.filter((h) => h.userData.key !== key);
     }
     const g = new THREE.Group();
-    this._placeSlotGroup(g, i);
+    g.position.set(slotX0(i), 0, 0);
     if (slot.type === 'room') buildRoom(g, slot, (f + 1) * 100 + i + 1);
     else if (slot.type === 'snack') buildSnack(g);
     else if (slot.type === 'gym') buildGym(g);
     else if (slot.type === 'pool') buildPool(g);
     else if (slot.type === 'empty') buildEmpty(g);
-    const hb = new THREE.Mesh(bgeo(SLOT_W, 1.6, ROOM_D), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }));
-    hb.position.set(SLOT_W / 2, 0.8, -ROOM_D / 2);
+    const hb = new THREE.Mesh(bgeo(SLOT_W, WALL_H, ROOM_D + FRONT_Z), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }));
+    hb.position.set(SLOT_W / 2, WALL_H / 2, (FRONT_Z - ROOM_D) / 2);
     hb.userData = { kind: 'slot', f, i, key };
     g.add(hb);
     this.hitboxes.push(hb);
@@ -717,8 +690,7 @@ export class HotelView {
     }
   }
 
-  // hitboxes clicáveis do andar visto (e o lobby)
-  pickables() { return this.hitboxes.filter((h) => h.userData.f === this.viewFloor); }
+  pickables() { return this.hitboxes; }
 
   setProgress() { /* o progresso aparece no balão do quarto */ }
 
@@ -732,11 +704,14 @@ export class HotelView {
   setLight(f, i, on, night) {
     const g = this.slotGroups.get(this.slotKey(f, i));
     if (!g) return;
-    const k = on ? night : 0;
+    const k = on ? Math.max(0.15, night) : 0;
     for (const m of g.userData.lamps || []) m.emissive.setRGB(k, k * 0.82, k * 0.45);
   }
 
-  setLobbyLight() { /* lobby sempre iluminado */ }
+  setLobbyLight(night) {
+    const k = 0.2 + night * 0.8;
+    for (const m of this.lobby?.userData.lamps || []) m.emissive.setRGB(k, k * 0.82, k * 0.45);
+  }
 
   setDecor(level) {
     this.decorLevel = level;
@@ -744,18 +719,16 @@ export class HotelView {
   }
 
   hover(f, i, color = 0x8ee07a) {
-    if (f === null || f !== this.viewFloor) { this.hoverBox.visible = false; return; }
-    const g = this.slotGroups.get(this.slotKey(f, i));
+    const g = f === null ? null : this.slotGroups.get(this.slotKey(f, i));
     if (!g) { this.hoverBox.visible = false; return; }
     this.hoverBox.visible = true;
     this.hoverMat.color.setHex(color);
-    const c = this.toWorld(f, i, new THREE.Vector3(SLOT_W / 2, 0.05, -ROOM_D / 2));
-    this.hoverBox.position.copy(c);
+    this.hoverEdges.material.color.setHex(color);
+    this.hoverBox.position.copy(this.toWorld(f, i, new THREE.Vector3(SLOT_W / 2, 0, -ROOM_D / 2)));
   }
 
   slotGroup(f, i) { return this.slotGroups.get(this.slotKey(f, i)); }
 
-  // ponto local de um espaço -> mundo
   toWorld(f, i, local) {
     const g = this.slotGroup(f, i);
     if (!g) return new THREE.Vector3();
@@ -763,13 +736,7 @@ export class HotelView {
     return g.localToWorld(local.clone());
   }
   slotWorld(f, i, local) { return this.toWorld(f, i, local); }
-  slotRotY(i) { return slotRow(i) === 0 ? 0 : Math.PI; }
-
-  // porta do espaço: x no mundo e z logo dentro do quarto
-  door(f, i) {
-    const p = this.toWorld(f, i, new THREE.Vector3((DOOR_L + DOOR_R) / 2, 0, -0.7));
-    return { x: p.x, zIn: p.z };
-  }
+  slotRotY() { return 0; }
 }
 
 export { SLOTS_PER_FLOOR, COLS, hex };

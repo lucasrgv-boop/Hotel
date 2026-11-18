@@ -107,6 +107,7 @@ export class UI {
 
   // ---------- Abas de andares ----------
   renderFloors() {
+    if (!$('floors')) return;
     const g = this.game;
     const vf = g.view.viewFloor;
     const parts = [];

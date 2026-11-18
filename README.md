@@ -1,6 +1,6 @@
 # Hotel Paraíso
 
-Jogo simples de administrar um hotel, em **3D estilo cartoon visto de cima** (casa de bonecas com paredes cortadas), rodando direto no navegador (Three.js, sem build).
+Jogo simples de administrar um hotel, em **3D estilo cartoon visto de lado** (casa de bonecas aberta na frente, todos os andares visíveis), rodando direto no navegador (Three.js, sem build).
 
 ## Como jogar
 
@@ -12,7 +12,6 @@ Jogo simples de administrar um hotel, em **3D estilo cartoon visto de cima** (ca
   - **Construa** em espaços vazios: quartos, lanchonete, academia, piscina.
   - **Reforme** quartos para Luxo e Suíte (diárias maiores, hóspedes VIP).
   - **Melhorias**: novos andares, camareiras (limpeza automática), recepcionista (alocação automática), decoração, marketing e kit de limpeza.
-- Cada andar é visto separadamente: troque pelos botões à esquerda (ou R / F). As bolinhas mostram quartos livres (verde) e sujos (vermelho).
 - A **avaliação** (estrelas) sobe com hóspedes satisfeitos e cai com quem desiste da fila. Mais estrelas = mais hóspedes e clientes mais exigentes.
 - Ciclo de dia e noite; salários são pagos à meia-noite. O jogo salva automaticamente no navegador.
 
@@ -24,7 +23,6 @@ Jogo simples de administrar um hotel, em **3D estilo cartoon visto de cima** (ca
 | Mover câmera | arrastar, WASD / setas | arrastar |
 | Zoom | roda do mouse | pinça |
 | Girar | Q / E | — |
-| Trocar de andar | R / F, PageUp / PageDown | botões à esquerda |
 | Pausar / velocidade | Espaço, 1, 2, 3 | botões no topo |
 | Melhorias | U | botão MELHORIAS |
 
@@ -42,9 +40,9 @@ Também funciona publicado no GitHub Pages (é tudo estático).
 ## Estrutura
 
 - `index.html`, `css/style.css` — página e HUD.
-- `js/main.js` — renderizador (sombras suaves, tone mapping), câmera de cima, dia/noite, entrada.
+- `js/main.js` — renderizador (sombras suaves, tone mapping), câmera lateral, dia/noite, entrada.
 - `js/game.js` — regras: hóspedes, fila, limpeza, camareiras, economia, salvamento.
-- `js/building.js` — modelos 3D do hotel: planta de cada andar, quartos, lanchonete, academia, piscina, elevador, jardim e rua.
+- `js/building.js` — modelos 3D do hotel: andares empilhados, quartos, lanchonete, academia, piscina, elevador, jardim e rua.
 - `js/characters.js` — personagens cartoon e balões de ícone.
 - `js/textures.js` — texturas e ícones vetoriais gerados por código.
 - `js/audio.js` — efeitos sonoros 8-bit via WebAudio.

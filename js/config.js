@@ -1,39 +1,33 @@
 // Constantes de layout e tabelas de balanceamento do jogo.
 //
-// Planta de cada andar (vista de cima, +z = rua):
+// Vista lateral (casa de bonecas aberta na frente). Cada andar:
 //
-//   z = -5.7  +------+--------+--------+--------+--------+   fundos
-//             | ELEV | col 0  | col 1  | col 2  | col 3  |   fileira de trás (i = 0..3)
-//   z = -1.2  +------+--------+--------+--------+--------+
-//             |            corredor (z = 0)               |
-//   z =  1.2  +------+--------+--------+--------+--------+
-//             |ESCADA| col 0  | col 1  | col 2  | col 3  |   fileira da frente (i = 4..7)
-//   z =  5.7  +------+--------+--------+--------+--------+   fachada (rua)
+//   x:  0 ── 3 ──────── 8 ──────── 13 ─────── 18 ─── ... ─── 33
+//       |ELEV|  esp. 0  |  esp. 1  |  esp. 2  |   ...  | esp. 5 |   z ∈ [-4.5, 0]  (cômodos)
+//       |    |              corredor (z = 0.85)                  |   z ∈ [0, 1.7]
+//                                rua (+z)
 //
-// No térreo, i = 4 e 5 formam o lobby com a recepção.
+// No térreo, os espaços 0 e 1 formam o lobby com a recepção.
 
-export const FLOOR_H = 3.0;     // distância entre andares
-export const WALL_H = 1.25;     // paredes cortadas (casa de bonecas)
+export const FLOOR_H = 3.2;     // distância entre andares
+export const WALL_H = FLOOR_H - 0.3;
 export const SLOT_W = 5;
 export const ROOM_D = 4.5;
-export const CORR_HALF = 1.2;   // meia largura do corredor
-export const CORE_W = 4;        // bloco do elevador/escada
-export const COLS = 4;
-export const SLOTS_PER_FLOOR = COLS * 2;
+export const CORE_W = 3;        // poço do elevador
+export const COLS = 6;
+export const SLOTS_PER_FLOOR = COLS;
 export const BUILDING_W = CORE_W + COLS * SLOT_W;
-export const BACK_Z = -(CORR_HALF + ROOM_D);
-export const FRONT_Z = CORR_HALF + ROOM_D;
-export const CORRIDOR_Z = 0;
-export const ELEV_X = 2;
-export const ELEV_Z = -3.2;
+export const BACK_Z = -ROOM_D;
+export const FRONT_Z = 1.7;     // borda da frente do corredor
+export const CORRIDOR_Z = 0.85;
+export const ELEV_X = CORE_W / 2;
+export const ELEV_Z = -2.2;
 export const MAX_FLOORS = 5;
-export const LOBBY_SLOTS = [4, 5];
-export const DOOR_X = CORE_W + SLOT_W;   // porta de entrada do hotel (centro do lobby)
-export const STREET_Z = 8.6;
+export const LOBBY_SLOTS = [0, 1];
+export const DOOR_X = CORE_W + 2 * SLOT_W - 1.4; // entrada do hotel (lado direito do lobby)
+export const STREET_Z = FRONT_Z + 1.8;
 
-export const slotCol = (i) => i % COLS;
-export const slotRow = (i) => (i < COLS ? 0 : 1); // 0 = trás, 1 = frente
-export const slotX0 = (i) => CORE_W + slotCol(i) * SLOT_W;
+export const slotX0 = (i) => CORE_W + i * SLOT_W;
 
 // Tempo: 1 hora de jogo = REAL_SEC_PER_HOUR segundos reais (na velocidade 1x)
 export const REAL_SEC_PER_HOUR = 2.5;
@@ -53,7 +47,7 @@ export const BUILDABLES = {
 };
 
 export const UPGRADES = {
-  floor:     { name: 'Novo Andar', desc: 'Constrói mais um andar com 8 espaços.', cost: (lvl) => 600 + lvl * 500, max: MAX_FLOORS - 1, icon: 'building' },
+  floor:     { name: 'Novo Andar', desc: 'Constrói mais um andar com 6 espaços.', cost: (lvl) => 500 + lvl * 450, max: MAX_FLOORS - 1, icon: 'building' },
   maid:      { name: 'Camareira', desc: 'Limpa quartos sujos automaticamente. Salário $15/dia.', cost: (lvl) => 250 + lvl * 150, max: 5, icon: 'broom' },
   reception: { name: 'Recepcionista', desc: 'Aloca hóspedes automaticamente no melhor quarto. Salário $30/dia.', cost: () => 900, max: 1, icon: 'bell' },
   decor:     { name: 'Decoração do Lobby', desc: 'Plantas e sofás: hóspedes esperam com +30% de paciência.', cost: (lvl) => 200 + lvl * 300, max: 2, icon: 'plant' },
