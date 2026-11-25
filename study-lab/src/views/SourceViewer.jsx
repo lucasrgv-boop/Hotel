@@ -40,6 +40,14 @@ export default function SourceViewer() {
         {m.chunks.map((c) => (
           <section key={c.id} data-page={c.page} className={`viewer-page ${String(c.page) === String(viewer.p) ? "target" : ""}`}>
             <div className="viewer-page-label">{c.label || `${m.pageLabel === "p." ? "Página" : m.pageLabel === "slide" ? "Slide" : "Seção"} ${c.page}`}</div>
+            {(m.figures || [])
+              .filter((f) => String(f.page) === String(c.page))
+              .map((f) => (
+                <figure key={f.img} className="viewer-figure">
+                  <img src={f.img} alt={f.caption || "Ilustração do material"} loading="lazy" />
+                  {f.caption && <figcaption>{f.caption}</figcaption>}
+                </figure>
+              ))}
             <div className="viewer-text">
               {String(c.page) === String(viewer.p) && quote ? <QuoteMark text={c.text} quote={quote} /> : viewer.search ? <Highlight text={c.text} query={viewer.q} /> : c.text}
             </div>

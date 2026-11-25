@@ -2,14 +2,14 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { normalizePack, mergePacks } from "./lib/content.js";
 import { DEMO_PACK } from "./content/demo.js";
 import * as store from "./lib/storage.js";
-import { emptyProgress, recordAnswer, recordCard, recordExam, recordPrep, markAchievement } from "./lib/progress.js";
+import { emptyProgress, recordAnswer, recordCard, recordExam, recordPrep, recordAtlas, markAchievement } from "./lib/progress.js";
 import { debounce, uid } from "./lib/util.js";
 import { getSample, onAiStatus } from "./lib/ai.js";
 
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
 
-const ROUTES = ["inicio", "preparacao", "biblioteca", "resumos", "quiz", "flashcards", "simulado", "revisao", "ajustes"];
+const ROUTES = ["inicio", "preparacao", "atlas", "biblioteca", "resumos", "quiz", "flashcards", "simulado", "revisao", "ajustes"];
 const defaultSettings = () => ({ theme: "system", goal: 150, demo: "auto", subjects: [], matSubject: {}, updatedAt: 0 });
 
 function readHash() {
@@ -32,6 +32,7 @@ export function AppProvider({ children }) {
   const [ai, setAi] = useState("checking");
   const [tutor, setTutor] = useState({ open: false, topicId: null, seed: null });
   const [viewer, setViewer] = useState(null); // {m, p, q}
+  const [pop, setPop] = useState(null); // "+10" flutuando
 
   // ---------- carga inicial ----------
   useEffect(() => {
@@ -123,8 +124,14 @@ export function AppProvider({ children }) {
   }, [settings.theme]);
 
   // ---------- rotas ----------
+  const goingRef = useRef(false);
   useEffect(() => {
-    const on = () => setRoute(readHash());
+    const on = () => {
+      // Navegação direta pelo endereço: não carrega parâmetros da tela anterior.
+      if (goingRef.current) goingRef.current = false;
+      else setParams({});
+      setRoute(readHash());
+    };
     window.addEventListener("hashchange", on);
     return () => window.removeEventListener("hashchange", on);
   }, []);
@@ -181,12 +188,17 @@ export function AppProvider({ children }) {
   const apply = useCallback(
     (fn) => {
       let events = [];
+      let gained = 0;
       setProgress((prev) => {
         const r = fn(prev);
         events = r.events || [];
+        gained = r.gained || 0;
         return r.p;
       });
-      setTimeout(() => showEvents(events), 0);
+      setTimeout(() => {
+        showEvents(events);
+        if (gained > 1) setPop({ n: gained, k: Date.now() });
+      }, 0);
     },
     [showEvents]
   );
@@ -195,7 +207,10 @@ export function AppProvider({ children }) {
     () => ({
       go(r, prm = {}) {
         setParams(prm);
-        if (location.hash.replace("#", "") !== r) location.hash = r;
+        if (location.hash.replace("#", "") !== r) {
+          goingRef.current = true;
+          location.hash = r;
+        }
         else setRoute(r);
         window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
       },
@@ -210,6 +225,9 @@ export function AppProvider({ children }) {
       },
       prep(topicId, patch, allIds) {
         apply((p) => recordPrep(p, topicId, patch, allIds));
+      },
+      atlasResult(r) {
+        apply((p) => recordAtlas(p, r));
       },
       achieve(id) {
         apply((p) => markAchievement(p, id));
@@ -298,6 +316,6 @@ export function AppProvider({ children }) {
     [apply, settings.goal, toast]
   );
 
-  const value = { content, baseError, progress, settings, loaded, route, params, toasts, cloud, ai, tutor, viewer, imports, ...actions };
+  const value = { content, baseError, progress, settings, loaded, route, params, toasts, cloud, ai, tutor, viewer, imports, pop, ...actions };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

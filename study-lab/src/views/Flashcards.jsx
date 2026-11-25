@@ -4,6 +4,7 @@ import { useApp } from "../state.jsx";
 import { Button, PageHead, Empty, Source, Rich, Bar, Segmented } from "../components/ui.jsx";
 import { shuffle } from "../lib/util.js";
 import { DemoBanner } from "./Dashboard.jsx";
+import { Plate } from "../components/Plate.jsx";
 
 const RATINGS = [
   { id: "dont", label: "Não sei", icon: X, tone: "bad", key: "1" },
@@ -166,7 +167,7 @@ export function CardSession({ cards, onRestart, compact }) {
 
   const topic = content.byTopic[card.topicId];
   return (
-    <div className={`cards ${compact ? "compact" : ""}`}>
+    <div className={`cards ${compact ? "compact" : ""} ${card.plate ? "has-plate" : ""}`}>
       <div className="cards-top">
         <span className="muted small">{topic?.title}</span>
         <span className="muted small tabnum">
@@ -177,7 +178,12 @@ export function CardSession({ cards, onRestart, compact }) {
       <div className={`flip ${flipped ? "flipped" : ""}`}>
         <button className="flip-inner" onClick={() => setFlipped((f) => !f)} aria-label={flipped ? "Mostrar a frente" : "Virar o cartão"}>
           <div className="flip-face flip-front" aria-hidden={flipped}>
-            <span className="face-label">Pergunta</span>
+            <span className="face-label">{card.plate ? "Identifique" : "Pergunta"}</span>
+            {card.plate && content.byPlate[card.plate] && (
+              <div className="face-plate">
+                <Plate plate={content.byPlate[card.plate]} cover={new Set([card.label])} highlight={card.label} zoomable={false} fit="34vh" />
+              </div>
+            )}
             <div className="face-text">{card.front}</div>
             <span className="face-hint">
               <Shuffle size={13} aria-hidden="true" /> Toque para virar

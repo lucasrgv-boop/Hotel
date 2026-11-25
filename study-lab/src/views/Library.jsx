@@ -116,21 +116,29 @@ function Results({ q }) {
 }
 
 function Overview() {
-  const { content, go } = useApp();
+  const { content, go, openSource } = useApp();
   const important = [...content.topics].sort((a, b) => b.importance - a.importance || a.order - b.order).slice(0, 6);
   const subjects = content.subjects
     .map((s) => ({ s, mats: content.materials.filter((m) => m.subjectId === s.id) }))
     .filter((g) => g.mats.length || !g.s.id.startsWith("guia"));
   return (
     <>
-      {content.notes?.length > 0 && (
-        <div className="notes">
-          {content.notes.map((n, i) => (
-            <p key={i} className="note">
-              <AlertTriangle size={15} aria-hidden="true" /> {n}
-            </p>
-          ))}
-        </div>
+      {content.materials.some((m) => m.figures?.length) && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Ilustrações das apostilas</h2>
+          </div>
+          <div className="figure-row">
+            {content.materials.flatMap((m) =>
+              (m.figures || []).map((f) => (
+                <button key={f.img} className="figure-card" onClick={() => openSource({ m: m.id, p: f.page })}>
+                  <img src={f.img} alt="" loading="lazy" />
+                  <span>{f.caption}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </section>
       )}
       {important.length > 0 && (
         <section className="panel">
@@ -169,6 +177,20 @@ function Overview() {
               {mats.map((m) => (
                 <MaterialCard key={m.id} m={m} />
               ))}
+      {content.notes?.length > 0 && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Observações sobre as apostilas</h2>
+          </div>
+          <ul className="notes-list">
+            {content.notes.map((n, i) => (
+              <li key={i}>
+                <AlertTriangle size={15} aria-hidden="true" /> <span>{n}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
             </div>
           ) : (
             <p className="muted small">Nenhum material nesta matéria.</p>

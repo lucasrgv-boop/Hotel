@@ -8,13 +8,17 @@ import { topicMastery } from "../lib/progress.js";
 import { shuffle, plural } from "../lib/util.js";
 import { MiniCards } from "./Flashcards.jsx";
 import { DemoBanner } from "./Dashboard.jsx";
+import { Explore } from "./Atlas.jsx";
+import { topicColor } from "../lib/content.js";
+import { bigBurst } from "../components/fx.js";
 
 const STAGES = [
   { id: "learn", label: "Entender", icon: Lightbulb },
-  { id: "examples", label: "Exemplos", icon: BookOpen },
+  { id: "examples", label: "Na imagem", icon: BookOpen },
   { id: "check", label: "Mini-teste", icon: ListChecks },
   { id: "reinforce", label: "Reforço", icon: RefreshCcw },
 ];
+const stagesFor = (t) => STAGES.map((st) => (st.id === "examples" && !t.plates?.length ? { ...st, label: "Exemplos" } : st));
 
 export default function Prep() {
   const { content, progress, params, go, setLast } = useApp();
@@ -51,7 +55,7 @@ export default function Prep() {
     <div className="page">
       {content.showingDemo && <DemoBanner />}
       <PageHead
-        eyebrow="Modo especial"
+        eyebrow={content.exam?.name ? `Trilha da ${content.exam.name}` : "Trilha da prova"}
         title="Preparação para a prova"
         actions={
           next ? (
@@ -65,7 +69,7 @@ export default function Prep() {
           )
         }
       >
-        Aprendizado ativo, assunto por assunto: entenda o essencial, veja exemplos, teste-se e reforce o que errar. No final, um simulado com todos os assuntos.
+        Um sistema por vez: entenda o essencial, encontre as estruturas na imagem, faça o mini-teste e reforce o que errar. No fim da trilha, o simulado geral.
       </PageHead>
 
       <div className="plan-summary">
@@ -86,71 +90,62 @@ export default function Prep() {
         </label>
       </div>
 
-      <ol className="plan">
-        {plan.map((t, i) => {
-          const st = progress.prep[t.id] || {};
-          const m = topicMastery(progress, content, t.id);
-          const stageIdx = STAGES.findIndex((s) => s.id === st.stage);
-          const isNext = next && next.id === t.id;
-          return (
-            <li key={t.id} className={`plan-item ${st.done ? "done" : ""} ${isNext ? "next" : ""}`}>
-              <span className="plan-num" aria-hidden="true">
-                {st.done ? <Check size={16} strokeWidth={3} /> : i + 1}
-              </span>
-              <div className="plan-body">
-                <div className="plan-title">
-                  <h3>{t.title}</h3>
-                  {t.importance === 3 && (
-                    <Badge tone="accent" icon={Sparkles}>
-                      Essencial
-                    </Badge>
-                  )}
-                </div>
-                {t.why && <p className="muted small">{t.why}</p>}
-                <div className="plan-meta">
-                  <span>
-                    <Clock size={13} aria-hidden="true" /> {t.minutes || 10} min
-                  </span>
-                  <span>{plural(questionsOf(content, t.id).length, "questão", "questões")}</span>
-                  <span>{plural(cardsOf(content, t.id).length, "cartão", "cartões")}</span>
-                  {st.done && st.total ? (
-                    <span className={st.score / st.total >= 0.7 ? "tone-good-text" : "tone-bad-text"}>
-                      Mini-teste: {st.score}/{st.total}
-                    </span>
-                  ) : null}
-                </div>
-                {!st.done && stageIdx >= 0 && (
-                  <div className="plan-stages">
-                    {STAGES.map((s, k) => (
-                      <span key={s.id} className={k < stageIdx ? "past" : k === stageIdx ? "cur" : ""}>
-                        {s.label}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <Button variant={isNext ? "primary" : "soft"} size="sm" onClick={() => go("preparacao", { topicId: t.id })}>
-                {st.done ? "Rever" : stageIdx >= 0 ? "Continuar" : "Estudar"}
-              </Button>
-            </li>
-          );
-        })}
-        <li className={`plan-item final ${allDone ? "next" : ""}`}>
-          <span className="plan-num" aria-hidden="true">
-            <Flag size={16} />
-          </span>
-          <div className="plan-body">
-            <div className="plan-title">
-              <h3>Simulado geral</h3>
-            </div>
-            <p className="muted small">Questões de todos os assuntos, embaralhadas, com cronômetro e correção comentada no final.</p>
-          </div>
-          <Button variant={allDone ? "primary" : "soft"} size="sm" onClick={() => go("simulado", { final: true })}>
-            Iniciar
-          </Button>
-        </li>
-      </ol>
+      <Trail plan={plan} next={next} allDone={allDone} />
     </div>
+  );
+}
+
+function Trail({ plan, next, allDone }) {
+  const { content, progress, go } = useApp();
+  const POS = [0, 1, 2, 1, 0, -1, -2, -1];
+  return (
+    <ol className="trail" aria-label="Trilha de estudos">
+      {plan.map((t, i) => {
+        const st = progress.prep[t.id] || {};
+        const isNext = next && next.id === t.id;
+        const stageIdx = STAGES.findIndex((x) => x.id === st.stage);
+        const ratio = st.done ? 1 : stageIdx >= 0 ? stageIdx / 4 : 0;
+        const stars = st.done ? (st.total ? (st.score / st.total >= 0.9 ? 3 : st.score / st.total >= 0.6 ? 2 : 1) : 1) : 0;
+        return (
+          <li key={t.id} className={`trail-step p${POS[i % POS.length]} ${st.done ? "done" : ""} ${isNext ? "next" : ""}`}>
+            {isNext && <span className="trail-bubble">{stageIdx >= 0 ? "Continuar" : "Começar"}</span>}
+            <button className={`trail-node c-${topicColor(t, i)}`} onClick={() => go("preparacao", { topicId: t.id })} aria-label={`${t.title}${st.done ? ", concluído" : ""}`}>
+              <svg className="trail-ring" viewBox="0 0 100 100" aria-hidden="true">
+                <circle cx="50" cy="50" r="46" className="trail-ring-bg" />
+                <circle cx="50" cy="50" r="46" className="trail-ring-fg" strokeDasharray={289} strokeDashoffset={289 * (1 - ratio)} />
+              </svg>
+              {t.thumb ? <img src={t.thumb} alt="" /> : <span className="trail-num">{i + 1}</span>}
+              {st.done && (
+                <span className="trail-check" aria-hidden="true">
+                  <Check size={14} strokeWidth={3.5} />
+                </span>
+              )}
+            </button>
+            <span className="trail-label">
+              <strong>{t.title}</strong>
+              <span className="trail-stars" aria-label={`${stars} estrelas`}>
+                {[1, 2, 3].map((k) => (
+                  <i key={k} className={k <= stars ? "on" : ""} />
+                ))}
+              </span>
+              <small>
+                {t.minutes} min{t.importance === 3 ? " · essencial" : ""}
+              </small>
+            </span>
+          </li>
+        );
+      })}
+      <li className={`trail-step p0 final ${allDone ? "next" : ""}`}>
+        {allDone && <span className="trail-bubble">Bora!</span>}
+        <button className="trail-node c-gold" onClick={() => go("simulado", { final: true })} aria-label="Simulado geral">
+          <Flag size={30} aria-hidden="true" />
+        </button>
+        <span className="trail-label">
+          <strong>Simulado geral</strong>
+          <small>todos os assuntos, com nota</small>
+        </span>
+      </li>
+    </ol>
   );
 }
 
@@ -176,6 +171,7 @@ function TopicSession({ topic, plan }) {
   };
 
   const finishTopic = (score, total) => {
+    bigBurst();
     prep(topic.id, { done: true, stage: "done", score: score ?? st.score, total: total ?? st.total, at: Date.now() }, allIds);
   };
 
@@ -196,7 +192,7 @@ function TopicSession({ topic, plan }) {
       </PageHead>
 
       <ol className="stepper" aria-label="Etapas do assunto">
-        {STAGES.map((s, k) => (
+        {stagesFor(topic).map((s, k) => (
           <li key={s.id} className={k < stageIdx || st.done ? "past" : k === stageIdx ? "cur" : ""}>
             <button onClick={() => goStage(s.id)} aria-current={k === stageIdx ? "step" : undefined}>
               <span className="step-dot">{k < stageIdx || st.done ? <Check size={13} strokeWidth={3} /> : k + 1}</span>
@@ -246,13 +242,58 @@ function TopicSession({ topic, plan }) {
               </ul>
             </div>
           )}
-          <StageNav onNext={() => goStage("examples")} nextLabel="Ver exemplos" topic={topic} openTutor={openTutor} />
+          {topic.plates?.length > 0 && topic.comparisons.length > 0 && (
+            <div className="comparisons">
+              <h3>Não confunda</h3>
+              {topic.comparisons.map((c, i) => (
+                <div key={i} className="compare">
+                  <div className="compare-pair">
+                    <span>{c.a}</span>
+                    <em>×</em>
+                    <span>{c.b}</span>
+                  </div>
+                  <p>{c.difference}</p>
+                  <Source src={c.src} compact />
+                </div>
+              ))}
+            </div>
+          )}
+          {topic.plates?.length > 0 && topic.attention.length > 0 && (
+            <div className="attention">
+              <h3>
+                <AlertTriangle size={16} aria-hidden="true" /> Pegadinhas
+              </h3>
+              <ul>
+                {topic.attention.map((a, i) => (
+                  <li key={i}>
+                    <Rich text={a.text} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <StageNav onNext={() => goStage("examples")} nextLabel={topic.plates?.length ? "Ver na imagem" : "Ver exemplos"} topic={topic} openTutor={openTutor} />
         </section>
       )}
 
       {stage === "examples" && (
         <section className="stage">
-          {topic.examples.length > 0 ? (
+          {topic.plates?.length > 0 && (
+            <div className="stage-plates">
+              {topic.plates.map((pid) => content.byPlate[pid]).filter(Boolean).slice(0, 1).map((pl) => (
+                <div key={pl.id} className="stage-plate">
+                  <h3>Encontre na ilustração</h3>
+                  <Explore plate={pl} onQuiz={() => go("atlas", { plateId: pl.id, mode: "tap" })} />
+                </div>
+              ))}
+              {topic.plates.length > 1 && (
+                <Button variant="ghost" size="sm" onClick={() => go("atlas", { plateId: topic.plates[1] })}>
+                  Ver a outra ilustração deste assunto
+                </Button>
+              )}
+            </div>
+          )}
+          {topic.plates?.length > 0 ? null : topic.examples.length > 0 ? (
             <div className="examples">
               <h3>Exemplos do material</h3>
               {topic.examples.map((e, i) => (
@@ -266,6 +307,18 @@ function TopicSession({ topic, plan }) {
             <p className="note">
               <AlertTriangle size={16} aria-hidden="true" /> O material não traz exemplos para este assunto. Se quiser, peça ao professor um exemplo; ele vai indicar se o exemplo não está nos seus arquivos.
             </p>
+          )}
+          {topic.practice?.length > 0 && (
+            <div className="practice-list">
+              <h3>Identificar na prática (lista da apostila)</h3>
+              <div className="keywords">
+                {topic.practice.map((x) => (
+                  <span key={x} className="kw">
+                    {x}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
           {topic.comparisons.length > 0 && (
             <div className="comparisons">
@@ -435,17 +488,18 @@ function StageNav({ onPrev, onNext, nextLabel, topic, openTutor }) {
   );
 }
 
-// Até 5 questões, variando os tipos.
+// Até 6 questões, variando os tipos (inclui identificação na imagem e caminhos).
 function pickCheck(qs) {
   const byType = {};
   shuffle(qs).forEach((q) => (byType[q.type] = byType[q.type] || []).push(q));
   const out = [];
   const types = Object.keys(byType);
-  while (out.length < Math.min(5, qs.length)) {
+  const N = 6;
+  while (out.length < Math.min(N, qs.length)) {
     for (const t of types) {
       const q = byType[t].shift();
-      if (q && out.length < 5) out.push(q);
+      if (q && out.length < N) out.push(q);
     }
   }
-  return out;
+  return shuffle(out);
 }

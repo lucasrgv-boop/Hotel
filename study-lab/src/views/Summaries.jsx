@@ -3,6 +3,7 @@ import { BookOpenText, Target, ListChecks, Layers, MessageCircleQuestion, AlertT
 import { useApp } from "../state.jsx";
 import { Button, PageHead, Empty, Source, Rich, Segmented, Badge } from "../components/ui.jsx";
 import { DemoBanner } from "./Dashboard.jsx";
+import { Explore } from "./Atlas.jsx";
 
 const TABS = [
   { value: "full", label: "Completo" },
@@ -13,12 +14,13 @@ const TABS = [
   { value: "examples", label: "Exemplos" },
   { value: "comparisons", label: "Comparações" },
   { value: "memorize", label: "Memorizar" },
+  { value: "image", label: "Na imagem" },
 ];
 
 export default function Summaries() {
   const { content, params, go, setLast, openTutor } = useApp();
   const [topicId, setTopicId] = useState(params.topicId || content.topics[0]?.id);
-  const [tab, setTab] = useState("full");
+  const [tab, setTab] = useState(params.tab || "simple");
   const topic = content.byTopic[topicId] || content.topics[0];
 
   useEffect(() => {
@@ -88,6 +90,7 @@ export default function Summaries() {
 
         <article className="split-main">
           <div className="topic-head">
+            {topic.thumb && <img className="topic-thumb" src={topic.thumb} alt="" />}
             <div>
               <h2>{topic.title}</h2>
               <div className="row-wrap tight">
@@ -115,7 +118,7 @@ export default function Summaries() {
               label="Formato do resumo"
               value={tab}
               onChange={setTab}
-              options={TABS.map((t) => ({ ...t, count: counts[t.value] }))}
+              options={TABS.filter((t) => t.value !== "image" || topic.plates?.length).map((t) => ({ ...t, count: counts[t.value] }))}
             />
           </div>
 
@@ -169,6 +172,28 @@ export default function Summaries() {
               ) : (
                 <Missing>O material não compara conceitos neste assunto.</Missing>
               ))}
+            {tab === "image" && (
+              <div className="image-tab">
+                {topic.plates.map((pid) => content.byPlate[pid]).filter(Boolean).map((pl) => (
+                  <div key={pl.id} className="stage-plate">
+                    <h3>{pl.title}</h3>
+                    <Explore plate={pl} onQuiz={() => go("atlas", { plateId: pl.id, mode: "name" })} />
+                  </div>
+                ))}
+                {topic.practice?.length > 0 && (
+                  <div className="practice-list">
+                    <h3>Identificar na prática (lista da apostila)</h3>
+                    <div className="keywords">
+                      {topic.practice.map((x) => (
+                        <span key={x} className="kw">
+                          {x}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {tab === "memorize" &&
               (topic.memorize.length ? (
                 <ul className="memorize-list">

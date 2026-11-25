@@ -1,0 +1,634 @@
+{
+ "nervoso": {
+  "img": "a1",
+  "w": 908,
+  "h": 1232,
+  "labels": [
+   {
+    "id": "nervoso-0",
+    "name": "Cérebro",
+    "x": 0.66,
+    "y": 2.44,
+    "w": 16.74,
+    "h": 4.87
+   },
+   {
+    "id": "nervoso-1",
+    "name": "Medula espinhal",
+    "x": 85.02,
+    "y": 6.01,
+    "w": 14.98,
+    "h": 8.44
+   },
+   {
+    "id": "nervoso-2",
+    "name": "Cerebelo",
+    "x": 4.19,
+    "y": 30.19,
+    "w": 18.5,
+    "h": 5.36
+   },
+   {
+    "id": "nervoso-3",
+    "name": "Tronco encefálico",
+    "x": 45.37,
+    "y": 30.19,
+    "w": 19.82,
+    "h": 8.6
+   },
+   {
+    "id": "nervoso-4",
+    "name": "Dendritos",
+    "x": 0.0,
+    "y": 70.62,
+    "w": 18.28,
+    "h": 5.19
+   },
+   {
+    "id": "nervoso-5",
+    "name": "Corpo celular",
+    "x": 45.81,
+    "y": 67.21,
+    "w": 13.44,
+    "h": 7.31
+   },
+   {
+    "id": "nervoso-6",
+    "name": "Axônio",
+    "x": 55.73,
+    "y": 77.27,
+    "w": 12.56,
+    "h": 4.55
+   },
+   {
+    "id": "nervoso-7",
+    "name": "Bainha de mielina",
+    "x": 74.01,
+    "y": 87.5,
+    "w": 18.5,
+    "h": 7.79
+   }
+  ]
+ },
+ "digestorio-a1": {
+  "img": "a1",
+  "w": 840,
+  "h": 916,
+  "labels": [
+   {
+    "id": "digestorio-a1-0",
+    "name": "Boca",
+    "x": 11.19,
+    "y": 5.02,
+    "w": 13.33,
+    "h": 6.77
+   },
+   {
+    "id": "digestorio-a1-1",
+    "name": "Faringe",
+    "x": 67.14,
+    "y": 1.97,
+    "w": 18.1,
+    "h": 6.99
+   },
+   {
+    "id": "digestorio-a1-2",
+    "name": "Esôfago",
+    "x": 65.95,
+    "y": 15.28,
+    "w": 19.52,
+    "h": 7.42
+   },
+   {
+    "id": "digestorio-a1-3",
+    "name": "Fígado",
+    "x": 2.38,
+    "y": 26.42,
+    "w": 17.14,
+    "h": 7.42
+   },
+   {
+    "id": "digestorio-a1-4",
+    "name": "Estômago",
+    "x": 75.71,
+    "y": 32.31,
+    "w": 22.62,
+    "h": 7.42
+   },
+   {
+    "id": "digestorio-a1-5",
+    "name": "Vesícula biliar",
+    "x": 1.67,
+    "y": 41.7,
+    "w": 18.81,
+    "h": 11.79
+   },
+   {
+    "id": "digestorio-a1-6",
+    "name": "Pâncreas",
+    "x": 72.86,
+    "y": 45.41,
+    "w": 20.48,
+    "h": 6.77
+   },
+   {
+    "id": "digestorio-a1-7",
+    "name": "Intestino grosso",
+    "x": 2.86,
+    "y": 60.48,
+    "w": 20.71,
+    "h": 12.23
+   },
+   {
+    "id": "digestorio-a1-8",
+    "name": "Intestino delgado",
+    "x": 77.86,
+    "y": 61.57,
+    "w": 20.24,
+    "h": 11.79
+   },
+   {
+    "id": "digestorio-a1-9",
+    "name": "Reto",
+    "x": 30.0,
+    "y": 87.55,
+    "w": 12.14,
+    "h": 6.77
+   },
+   {
+    "id": "digestorio-a1-10",
+    "name": "Ânus",
+    "x": 59.52,
+    "y": 93.45,
+    "w": 13.33,
+    "h": 6.55
+   }
+  ]
+ },
+ "urinario": {
+  "img": "a1",
+  "w": 720,
+  "h": 824,
+  "labels": [
+   {
+    "id": "urinario-0",
+    "name": "Rim",
+    "x": 1.67,
+    "y": 8.74,
+    "w": 12.78,
+    "h": 7.28
+   },
+   {
+    "id": "urinario-1",
+    "name": "Rim",
+    "x": 86.39,
+    "y": 8.5,
+    "w": 12.5,
+    "h": 7.04
+   },
+   {
+    "id": "urinario-2",
+    "name": "Ureter",
+    "x": 6.39,
+    "y": 41.02,
+    "w": 20.28,
+    "h": 8.25
+   },
+   {
+    "id": "urinario-3",
+    "name": "Ureter",
+    "x": 77.5,
+    "y": 40.29,
+    "w": 19.44,
+    "h": 8.01
+   },
+   {
+    "id": "urinario-4",
+    "name": "Bexiga urinária",
+    "x": 73.61,
+    "y": 69.42,
+    "w": 21.94,
+    "h": 12.86
+   },
+   {
+    "id": "urinario-5",
+    "name": "Uretra",
+    "x": 64.44,
+    "y": 89.56,
+    "w": 20.0,
+    "h": 8.01
+   }
+  ]
+ },
+ "masculino": {
+  "img": "a1",
+  "w": 1144,
+  "h": 720,
+  "labels": [
+   {
+    "id": "masculino-0",
+    "name": "Bexiga urinária",
+    "x": 29.72,
+    "y": 14.72,
+    "w": 10.49,
+    "h": 8.33
+   },
+   {
+    "id": "masculino-1",
+    "name": "Vesículas seminais",
+    "x": 1.4,
+    "y": 28.33,
+    "w": 13.64,
+    "h": 13.33
+   },
+   {
+    "id": "masculino-2",
+    "name": "Ducto deferente",
+    "x": 54.2,
+    "y": 33.61,
+    "w": 13.11,
+    "h": 11.94
+   },
+   {
+    "id": "masculino-3",
+    "name": "Próstata",
+    "x": 39.51,
+    "y": 45.0,
+    "w": 11.89,
+    "h": 8.89
+   },
+   {
+    "id": "masculino-4",
+    "name": "Epidídimo",
+    "x": 0.52,
+    "y": 62.78,
+    "w": 14.16,
+    "h": 8.61
+   },
+   {
+    "id": "masculino-5",
+    "name": "Testículo",
+    "x": 3.67,
+    "y": 80.56,
+    "w": 13.46,
+    "h": 8.89
+   },
+   {
+    "id": "masculino-6",
+    "name": "Uretra",
+    "x": 54.72,
+    "y": 80.0,
+    "w": 9.79,
+    "h": 7.22
+   },
+   {
+    "id": "masculino-7",
+    "name": "Pênis",
+    "x": 39.86,
+    "y": 89.72,
+    "w": 14.51,
+    "h": 10.28
+   }
+  ]
+ },
+ "feminino": {
+  "img": "a1",
+  "w": 1322,
+  "h": 720,
+  "labels": [
+   {
+    "id": "feminino-0",
+    "name": "Tuba uterina",
+    "x": 0.0,
+    "y": 4.44,
+    "w": 11.2,
+    "h": 21.11
+   },
+   {
+    "id": "feminino-1",
+    "name": "Tuba uterina",
+    "x": 59.0,
+    "y": 18.61,
+    "w": 10.74,
+    "h": 17.5
+   },
+   {
+    "id": "feminino-2",
+    "name": "Ovário",
+    "x": 8.47,
+    "y": 53.06,
+    "w": 9.98,
+    "h": 9.44
+   },
+   {
+    "id": "feminino-3",
+    "name": "Ovário",
+    "x": 56.73,
+    "y": 50.56,
+    "w": 9.98,
+    "h": 8.33
+   },
+   {
+    "id": "feminino-4",
+    "name": "Útero",
+    "x": 39.79,
+    "y": 50.56,
+    "w": 8.77,
+    "h": 8.33
+   },
+   {
+    "id": "feminino-5",
+    "name": "Colo do útero",
+    "x": 40.39,
+    "y": 62.78,
+    "w": 11.5,
+    "h": 12.5
+   },
+   {
+    "id": "feminino-6",
+    "name": "Vagina",
+    "x": 40.39,
+    "y": 78.33,
+    "w": 9.83,
+    "h": 8.06
+   },
+   {
+    "id": "feminino-7",
+    "name": "Vulva",
+    "x": 43.42,
+    "y": 89.72,
+    "w": 8.47,
+    "h": 8.06
+   }
+  ]
+ },
+ "cardiovascular": {
+  "img": "a2",
+  "w": 832,
+  "h": 784,
+  "labels": [
+   {
+    "id": "cardiovascular-0",
+    "name": "Veia cava superior",
+    "x": 0.72,
+    "y": 8.67,
+    "w": 22.36,
+    "h": 13.01
+   },
+   {
+    "id": "cardiovascular-1",
+    "name": "Aorta",
+    "x": 74.28,
+    "y": 6.38,
+    "w": 14.9,
+    "h": 7.91
+   },
+   {
+    "id": "cardiovascular-2",
+    "name": "Artéria pulmonar",
+    "x": 77.88,
+    "y": 18.11,
+    "w": 20.19,
+    "h": 12.5
+   },
+   {
+    "id": "cardiovascular-3",
+    "name": "Átrio direito",
+    "x": 2.16,
+    "y": 35.46,
+    "w": 16.59,
+    "h": 13.01
+   },
+   {
+    "id": "cardiovascular-4",
+    "name": "Átrio esquerdo",
+    "x": 80.77,
+    "y": 37.24,
+    "w": 17.79,
+    "h": 11.99
+   },
+   {
+    "id": "cardiovascular-5",
+    "name": "Valva tricúspide",
+    "x": 0.24,
+    "y": 54.85,
+    "w": 20.91,
+    "h": 12.5
+   },
+   {
+    "id": "cardiovascular-6",
+    "name": "Valva mitral",
+    "x": 81.25,
+    "y": 52.81,
+    "w": 15.62,
+    "h": 11.99
+   },
+   {
+    "id": "cardiovascular-7",
+    "name": "Ventrículo direito",
+    "x": 5.29,
+    "y": 71.94,
+    "w": 21.39,
+    "h": 12.24
+   },
+   {
+    "id": "cardiovascular-8",
+    "name": "Ventrículo esquerdo",
+    "x": 77.4,
+    "y": 69.9,
+    "w": 22.6,
+    "h": 13.01
+   },
+   {
+    "id": "cardiovascular-9",
+    "name": "Veia cava inferior",
+    "x": 16.83,
+    "y": 88.27,
+    "w": 20.19,
+    "h": 11.73
+   },
+   {
+    "id": "cardiovascular-10",
+    "name": "Artérias coronárias",
+    "x": 54.09,
+    "y": 87.76,
+    "w": 22.36,
+    "h": 12.24
+   }
+  ]
+ },
+ "respiratorio": {
+  "img": "a2",
+  "w": 812,
+  "h": 768,
+  "labels": [
+   {
+    "id": "respiratorio-0",
+    "name": "Laringe",
+    "x": 65.02,
+    "y": 3.91,
+    "w": 16.75,
+    "h": 7.29
+   },
+   {
+    "id": "respiratorio-1",
+    "name": "Traqueia",
+    "x": 65.52,
+    "y": 14.84,
+    "w": 19.21,
+    "h": 7.55
+   },
+   {
+    "id": "respiratorio-2",
+    "name": "Pulmão direito",
+    "x": 0.99,
+    "y": 19.79,
+    "w": 19.46,
+    "h": 13.8
+   },
+   {
+    "id": "respiratorio-3",
+    "name": "Brônquio",
+    "x": 78.33,
+    "y": 26.82,
+    "w": 18.97,
+    "h": 7.55
+   },
+   {
+    "id": "respiratorio-4",
+    "name": "Bronquíolos",
+    "x": 79.06,
+    "y": 47.66,
+    "w": 20.94,
+    "h": 8.59
+   },
+   {
+    "id": "respiratorio-5",
+    "name": "Alvéolos",
+    "x": 80.79,
+    "y": 69.01,
+    "w": 18.23,
+    "h": 12.76
+   },
+   {
+    "id": "respiratorio-6",
+    "name": "Pulmão esquerdo",
+    "x": 1.23,
+    "y": 71.61,
+    "w": 21.43,
+    "h": 14.84
+   },
+   {
+    "id": "respiratorio-7",
+    "name": "Diafragma",
+    "x": 48.77,
+    "y": 89.58,
+    "w": 22.41,
+    "h": 9.9
+   }
+  ]
+ },
+ "digestorio-a2": {
+  "img": "a2",
+  "w": 768,
+  "h": 1044,
+  "labels": [
+   {
+    "id": "digestorio-a2-0",
+    "name": "Boca",
+    "x": 9.38,
+    "y": 3.64,
+    "w": 14.84,
+    "h": 6.13
+   },
+   {
+    "id": "digestorio-a2-1",
+    "name": "Faringe",
+    "x": 18.23,
+    "y": 11.88,
+    "w": 16.67,
+    "h": 5.94
+   },
+   {
+    "id": "digestorio-a2-2",
+    "name": "Esôfago",
+    "x": 19.27,
+    "y": 23.18,
+    "w": 20.05,
+    "h": 6.51
+   },
+   {
+    "id": "digestorio-a2-3",
+    "name": "Fígado",
+    "x": 4.95,
+    "y": 35.06,
+    "w": 18.49,
+    "h": 7.09
+   },
+   {
+    "id": "digestorio-a2-4",
+    "name": "Fígado",
+    "x": 1.82,
+    "y": 47.13,
+    "w": 19.01,
+    "h": 6.51
+   },
+   {
+    "id": "digestorio-a2-5",
+    "name": "Vesícula biliar",
+    "x": 1.82,
+    "y": 53.64,
+    "w": 19.01,
+    "h": 9.2
+   },
+   {
+    "id": "digestorio-a2-6",
+    "name": "Estômago",
+    "x": 76.04,
+    "y": 39.46,
+    "w": 22.66,
+    "h": 6.7
+   },
+   {
+    "id": "digestorio-a2-7",
+    "name": "Pâncreas",
+    "x": 76.56,
+    "y": 49.23,
+    "w": 22.14,
+    "h": 6.51
+   },
+   {
+    "id": "digestorio-a2-8",
+    "name": "Intestino grosso",
+    "x": 3.65,
+    "y": 66.48,
+    "w": 20.83,
+    "h": 10.15
+   },
+   {
+    "id": "digestorio-a2-9",
+    "name": "Intestino delgado",
+    "x": 78.65,
+    "y": 64.37,
+    "w": 21.09,
+    "h": 10.34
+   },
+   {
+    "id": "digestorio-a2-10",
+    "name": "Reto",
+    "x": 21.61,
+    "y": 86.97,
+    "w": 14.58,
+    "h": 6.51
+   },
+   {
+    "id": "digestorio-a2-11",
+    "name": "Ânus",
+    "x": 65.1,
+    "y": 91.57,
+    "w": 15.62,
+    "h": 6.7
+   }
+  ]
+ }
+}

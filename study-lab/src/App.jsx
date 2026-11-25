@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Home, Target, Library as LibIcon, BookOpenText, ListChecks, Layers, Timer, RefreshCcw, Settings as Gear,
-  MessageCircleQuestion, Flame, MoreHorizontal, X, FlaskConical,
+  MessageCircleQuestion, Flame, MoreHorizontal, X, Heart, Map as MapIcon, Image as ImageIcon,
 } from "lucide-react";
 import { useApp } from "./state.jsx";
 import { levelOf } from "./lib/progress.js";
@@ -15,12 +15,14 @@ import Flashcards from "./views/Flashcards.jsx";
 import Exam from "./views/Exam.jsx";
 import Review from "./views/Review.jsx";
 import Settings from "./views/Settings.jsx";
+import Atlas from "./views/Atlas.jsx";
 import Tutor from "./views/Tutor.jsx";
 import SourceViewer from "./views/SourceViewer.jsx";
 
 export const NAV = [
   { id: "inicio", label: "Início", icon: Home },
-  { id: "preparacao", label: "Preparação", icon: Target, hint: "Prova de amanhã" },
+  { id: "preparacao", label: "Trilha", icon: MapIcon, hint: "Preparação para a prova" },
+  { id: "atlas", label: "Atlas", icon: ImageIcon },
   { id: "biblioteca", label: "Biblioteca", icon: LibIcon },
   { id: "resumos", label: "Resumos", icon: BookOpenText },
   { id: "quiz", label: "Quiz", icon: ListChecks },
@@ -28,12 +30,12 @@ export const NAV = [
   { id: "simulado", label: "Simulado", icon: Timer },
   { id: "revisao", label: "Revisão", icon: RefreshCcw },
 ];
-const MOBILE_MAIN = ["inicio", "preparacao", "quiz", "flashcards"];
+const MOBILE_MAIN = ["inicio", "preparacao", "atlas", "quiz"];
 
-const VIEWS = { inicio: Dashboard, preparacao: Prep, biblioteca: Library, resumos: Summaries, quiz: Quiz, flashcards: Flashcards, simulado: Exam, revisao: Review, ajustes: Settings };
+const VIEWS = { inicio: Dashboard, preparacao: Prep, atlas: Atlas, biblioteca: Library, resumos: Summaries, quiz: Quiz, flashcards: Flashcards, simulado: Exam, revisao: Review, ajustes: Settings };
 
 export default function App() {
-  const { route, go, content, progress, openTutor, tutor, viewer } = useApp();
+  const { route, go, content, progress, openTutor, tutor, viewer, pop } = useApp();
   const [more, setMore] = useState(false);
   const View = VIEWS[route] || Dashboard;
   const lvl = levelOf(progress.xp);
@@ -45,7 +47,7 @@ export default function App() {
       <aside className="sidebar" aria-label="Navegação principal">
         <a className="brand" href="#inicio" onClick={(e) => (e.preventDefault(), go("inicio"))}>
           <span className="brand-mark" aria-hidden="true">
-            <FlaskConical size={18} strokeWidth={2.4} />
+            <Heart size={18} strokeWidth={2.6} />
           </span>
           <span className="brand-name">Study Lab</span>
         </a>
@@ -54,7 +56,7 @@ export default function App() {
             <button key={n.id} className={`nav-item ${route === n.id ? "on" : ""}`} onClick={() => go(n.id)} aria-current={route === n.id ? "page" : undefined}>
               <n.icon size={18} strokeWidth={2.1} aria-hidden="true" />
               <span>{n.label}</span>
-              {n.id === "preparacao" && <em className="nav-pill">Prova</em>}
+              {n.id === "preparacao" && <em className="nav-pill">A1</em>}
             </button>
           ))}
         </nav>
@@ -81,7 +83,7 @@ export default function App() {
         <header className="topbar">
           <a className="brand brand-mobile" href="#inicio" onClick={(e) => (e.preventDefault(), go("inicio"))}>
             <span className="brand-mark" aria-hidden="true">
-              <FlaskConical size={16} strokeWidth={2.4} />
+              <Heart size={16} strokeWidth={2.6} />
             </span>
             <span className="brand-name">Study Lab</span>
           </a>
@@ -91,9 +93,17 @@ export default function App() {
               <span className="tabnum">{progress.streak.count}</span>
               <span className="sr-only">dias seguidos</span>
             </span>
-            <span className="stat-chip" title="Pontos">
+            <span className="stat-chip pts-chip" title="Pontos">
               <span className="tabnum">{progress.xp}</span> pts
+              {pop && (
+                <span key={pop.k} className="xp-pop" aria-hidden="true">
+                  +{pop.n}
+                </span>
+              )}
             </span>
+            <button className="stat-chip tutor-top" onClick={() => openTutor({ topicId: null })} aria-label="Abrir o professor virtual">
+              <MessageCircleQuestion size={16} strokeWidth={2.4} aria-hidden="true" />
+            </button>
             <span className="stat-chip hide-sm" title="Nível">
               Nível {lvl.n}
             </span>

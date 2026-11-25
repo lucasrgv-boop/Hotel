@@ -12,7 +12,18 @@ npm run dev      # desenvolvimento
 npm run build    # gera dist/index.html (arquivo único) e dist/artifact.html (página do Artifact)
 ```
 
-A página publicada lê `content.json`, servido ao lado do HTML.
+A página publicada lê `content.json` e as imagens de `img/`, servidos ao lado do HTML.
+
+### Conteúdo atual: Anatomia A1
+
+Gerado a partir das duas apostilas (Anatomia A1 e Cardiovascular/Respiratório/Digestório) por `content-src/anatomia-a1.mjs`:
+
+```bash
+node content-src/anatomia-a1.mjs   # recria public/content.json
+```
+
+- `content-src/pages.json`: texto de cada página das apostilas (para as citações e a busca).
+- `content-src/plates.json`: posição de cada etiqueta nas ilustrações recortadas (`public/img/*.jpg`), em % da imagem.
 
 ## Arquitetura
 
@@ -27,7 +38,8 @@ src/
   lib/generate.js      Geração de estudo: com o Claude (capacidade sample) ou automática por regras
   lib/ai.js            Acesso ao Claude e mensagens de erro
   components/          Questão (5 tipos), sequência de questões, peças de interface
-  views/               Início, Preparação, Biblioteca, Resumos, Quiz, Flashcards, Simulado, Revisão, Professor
+  views/               Início, Trilha (preparação), Atlas, Biblioteca, Resumos, Quiz, Flashcards, Simulado, Revisão, Professor
+  components/Plate.jsx Ilustração com as etiquetas escondidas/reveladas (atlas, questões e cartões de imagem)
 public/content.json    Pacote de conteúdo gerado a partir dos materiais enviados no chat
 ```
 
@@ -50,9 +62,13 @@ Para adicionar uma matéria, inclua-a em `subjects` e adicione os materiais, ass
     { "id": "q2", "topicId": "t1", "type": "tf", "prompt": "...", "answer": false, "explanation": "..." },
     { "id": "q3", "topicId": "t1", "type": "cloze", "prompt": "Frase com ____.", "answer": ["resposta", "variação aceita"] },
     { "id": "q4", "topicId": "t1", "type": "match", "prompt": "Associe...", "pairs": [{ "left": "...", "right": "..." }] },
-    { "id": "q5", "topicId": "t1", "type": "open", "prompt": "...", "answer": "resposta modelo", "keyPoints": ["..."] }
+    { "id": "q5", "topicId": "t1", "type": "open", "prompt": "...", "answer": "resposta modelo", "keyPoints": ["..."] },
+    { "id": "q6", "topicId": "t1", "type": "order", "prompt": "Coloque em ordem...", "items": ["1º", "2º", "3º"] },
+    { "id": "q7", "topicId": "t1", "type": "spot", "plate": "p1", "label": "p1-0", "ask": "name | tap", "prompt": "..." }
   ],
   "flashcards": [{ "id": "f1", "topicId": "t1", "front": "...", "back": "...", "explanation": "...", "src": { "p": 1 } }],
+  "plates": [{ "id": "p1", "topicId": "t1", "materialId": "m1", "title": "...", "img": "img/p1.jpg", "w": 800, "h": 600,
+               "labels": [{ "id": "p1-0", "name": "Estrutura", "x": 10, "y": 20, "w": 12, "h": 5, "fn": "função segundo o texto" }] }],
   "notes": ["Avisos sobre lacunas dos materiais, por exemplo um assunto citado mas não explicado."]
 }
 ```

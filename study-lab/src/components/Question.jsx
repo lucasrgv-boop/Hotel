@@ -6,11 +6,19 @@ import { TYPE_LABEL } from "../lib/content.js";
 import { answerMatches, shuffle } from "../lib/util.js";
 import { cheer } from "../lib/progress.js";
 import { aiAvailable, askJson, errorCopy } from "../lib/ai.js";
+import { Plate } from "./Plate.jsx";
+import { burst } from "./fx.js";
 
 // Ordem embaralhada estável das alternativas/itens de uma questão.
 export function makeOrder(q) {
   if (q.type === "mcq") return shuffle(q.options.map((_, i) => i));
   if (q.type === "match") return shuffle(q.pairs.map((_, i) => i));
+  if (q.type === "order") {
+    let o = shuffle(q.items.map((_, i) => i));
+    if (o.every((v, i) => v === i) && o.length > 1) o = [...o.slice(1), o[0]];
+    return o;
+  }
+  if (q.type === "spot" && q.ask !== "tap") return shuffle([q.targetName, ...shuffle(q.names.filter((n) => n !== q.targetName)).slice(0, 3)]);
   return null;
 }
 
@@ -28,6 +36,10 @@ export function grade(q, r) {
       return q.pairs.every((_, i) => r[i] === i);
     case "open":
       return r?.verdict ? r.verdict === "correct" : null;
+    case "order":
+      return r.length === q.items.length && r.every((v, i) => v === i);
+    case "spot":
+      return r?.name === q.targetName;
     default:
       return false;
   }
@@ -38,6 +50,7 @@ export function isAnswered(q, r) {
   if (q.type === "cloze") return String(r).trim().length > 0;
   if (q.type === "match") return q.pairs.every((_, i) => r[i] != null);
   if (q.type === "open") return String(r?.text || "").trim().length > 0;
+  if (q.type === "order") return r.length === q.items.length;
   return true;
 }
 
@@ -53,6 +66,10 @@ export function correctText(q) {
       return q.pairs.map((p) => `${p.left} → ${p.right}`).join(" · ");
     case "open":
       return q.answer;
+    case "order":
+      return q.items.join(" → ");
+    case "spot":
+      return q.targetName;
     default:
       return "";
   }
@@ -71,9 +88,99 @@ export function responseText(q, r) {
       return q.pairs.map((p, i) => `${p.left} → ${r[i] != null ? q.pairs[r[i]].right : "—"}`).join(" · ");
     case "open":
       return r?.text || "Sem resposta";
+    case "order":
+      return r.map((i) => q.items[i]).join(" → ") || "Sem resposta";
+    case "spot":
+      return r?.name || "Sem resposta";
     default:
       return "";
   }
+}
+
+// Montar a sequência tocando nos itens.
+function OrderBuilder({ q, order, value, onChange, locked, showFeedback }) {
+  const seq = value || [];
+  const pool = order.filter((i) => !seq.includes(i));
+  return (
+    <div className="order">
+      <ol className="order-seq" aria-label="Sua sequência">
+        {q.items.map((_, k) => {
+          const v = seq[k];
+          const st = showFeedback ? (v === k ? "right" : "wrong") : "";
+          return (
+            <li key={k} className={`order-slot ${v != null ? "filled" : ""} ${st}`}>
+              <span className="order-n">{k + 1}</span>
+              {v != null ? (
+                <button className="order-chip" disabled={locked} onClick={() => onChange(seq.filter((x) => x !== v))}>
+                  {q.items[v]}
+                </button>
+              ) : (
+                <span className="order-empty">{k === seq.length && !locked ? "toque abaixo" : ""}</span>
+              )}
+              {showFeedback && v !== k && <span className="order-fix">{q.items[k]}</span>}
+            </li>
+          );
+        })}
+      </ol>
+      {!locked && pool.length > 0 && (
+        <div className="order-pool">
+          {pool.map((i) => (
+            <button key={i} className="order-chip pool" onClick={() => onChange([...seq, i])}>
+              {q.items[i]}
+            </button>
+          ))}
+        </div>
+      )}
+      {!locked && seq.length > 0 && (
+        <button className="link-btn" onClick={() => onChange([])}>
+          Limpar sequência
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SpotQuestion({ q, order, value, onChange, locked, showFeedback }) {
+  const { content } = useApp();
+  const plate = content.byPlate[q.plate];
+  const marks = {};
+  if (showFeedback) {
+    plate.labels.forEach((l) => {
+      if (l.name === q.targetName) marks[l.id] = "right";
+    });
+    if (value?.id && value.name !== q.targetName) marks[value.id] = "wrong";
+  } else if (value?.id) marks[value.id] = "sel";
+  if (q.ask === "tap")
+    return (
+      <Plate
+        plate={plate}
+        fit="48vh"
+        zoomable={false}
+        cover="all"
+        marks={marks}
+        onTap={locked ? null : (l) => onChange({ id: l.id, name: l.name })}
+        caption={showFeedback ? null : "Toque numa etiqueta escondida"}
+      />
+    );
+  return (
+    <>
+      <Plate plate={plate} fit="42vh" zoomable={false} cover="all" highlight={showFeedback ? null : q.label} marks={showFeedback ? marks : {}} />
+      <div className="options options-grid" role="radiogroup" aria-label="Alternativas">
+        {order.map((name) => {
+          const sel = value?.name === name;
+          const isAns = name === q.targetName;
+          const cls = showFeedback ? (isAns ? "right" : sel ? "wrong" : "dim") : sel ? "sel" : "";
+          return (
+            <button key={name} role="radio" aria-checked={sel} className={`option ${cls}`} onClick={() => onChange({ name })} disabled={locked}>
+              <span className="option-text">{name}</span>
+              {showFeedback && isAns && <Check size={18} className="option-mark" aria-label="Correta" />}
+              {showFeedback && sel && !isAns && <X size={18} className="option-mark" aria-label="Sua resposta" />}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
 }
 
 function ClozePrompt({ prompt, value, onChange, disabled, onEnter, state }) {
@@ -144,7 +251,18 @@ export function Question({ q, mode = "practice", order: orderProp, response: res
     setChecked(true);
     setResult(ok);
     setMsg(cheer(ok));
+    if (ok) burst();
     onResult?.(ok, attempts === 0, resp);
+    setAttempts((a) => a + 1);
+  };
+
+  const finishWith = (r) => {
+    setChecked(true);
+    const ok = grade(q, r);
+    setResult(ok);
+    setMsg(cheer(ok));
+    if (ok) burst();
+    onResult?.(ok, attempts === 0, r);
     setAttempts((a) => a + 1);
   };
 
@@ -225,6 +343,29 @@ Responda só com JSON: {"verdict":"correct"|"partial"|"incorrect","feedback":"2 
         />
       ) : (
         <p className="q-prompt">{q.prompt}</p>
+      )}
+
+      {q.type === "order" && (
+        <OrderBuilder q={q} order={order} value={resp} onChange={update} locked={locked} showFeedback={showFeedback} />
+      )}
+
+      {q.type === "spot" && (
+        <SpotQuestion
+          q={q}
+          order={order}
+          value={resp}
+          locked={locked}
+          showFeedback={showFeedback}
+          onChange={(r) => {
+            if (locked) return;
+            setResp(r);
+            if (exam) onChange?.(r);
+            else {
+              // Identificação corrige na hora, sem precisar de botão.
+              setTimeout(() => finishWith(r), 0);
+            }
+          }}
+        />
       )}
 
       {q.type === "mcq" && (
@@ -367,7 +508,7 @@ Responda só com JSON: {"verdict":"correct"|"partial"|"incorrect","feedback":"2 
 
       {!exam && !review && (
         <div className="q-actions">
-          {!checked && q.type !== "open" && (
+          {!checked && q.type !== "open" && q.type !== "spot" && (
             <Button onClick={check} disabled={!isAnswered(q, resp)} icon={Check}>
               Responder
             </Button>

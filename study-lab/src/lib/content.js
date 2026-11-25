@@ -32,6 +32,7 @@ export function normalizePack(raw, origin = "pack") {
     demo: !!(m.demo || pack.demo),
     addedAt: m.addedAt || null,
     pageLabel: m.pageLabel || "p.",
+    figures: asArr(m.figures),
     chunks: asArr(m.chunks).map((c, i) => ({
       id: c.id || `${m.id}-c${i}`,
       materialId: m.id,
@@ -61,16 +62,24 @@ export function normalizePack(raw, origin = "pack") {
       memorize: asArr(t.memorize).map((x) => normItem(x, mid)),
       sources: asArr(t.sources).map((s) => normSrc(s, mid)),
       demo: !!(t.demo || pack.demo),
+      color: t.color || null,
+      thumb: t.thumb || null,
+      plates: asArr(t.plates),
+      practice: asArr(t.practice),
     };
   });
+  const plates = asArr(pack.plates).map((p) => ({
+    ...p,
+    labels: asArr(p.labels).map((l) => ({ ...l, plateId: p.id, src: normSrc(l.src, p.materialId) })),
+  }));
   const topicMat = Object.fromEntries(topics.map((t) => [t.id, t.materialIds[0]]));
   const questions = asArr(pack.questions)
     .map((q) => ({ ...q, src: normSrc(q.src, topicMat[q.topicId]), demo: !!(q.demo || pack.demo) }))
     .filter(validQuestion);
   const flashcards = asArr(pack.flashcards)
-    .filter((c) => c.front && c.back)
+    .filter((c) => (c.front || c.plate) && c.back)
     .map((c) => ({ ...c, src: normSrc(c.src, topicMat[c.topicId]), demo: !!(c.demo || pack.demo) }));
-  return { title: pack.title || "", exam: pack.exam || null, subjects, materials, topics, questions, flashcards, notes: asArr(pack.notes) };
+  return { title: pack.title || "", exam: pack.exam || null, subjects, materials, topics, questions, flashcards, plates, notes: asArr(pack.notes) };
 }
 
 function validQuestion(q) {
@@ -86,6 +95,10 @@ function validQuestion(q) {
       return Array.isArray(q.pairs) && q.pairs.length >= 2;
     case "open":
       return !!q.answer;
+    case "order":
+      return Array.isArray(q.items) && q.items.length >= 2;
+    case "spot":
+      return !!(q.plate && q.label);
     default:
       return false;
   }
@@ -93,7 +106,7 @@ function validQuestion(q) {
 
 // Junta vários pacotes num só conteúdo navegável.
 export function mergePacks(packs) {
-  const out = { subjects: [], materials: [], topics: [], questions: [], flashcards: [], exam: null, notes: [] };
+  const out = { subjects: [], materials: [], topics: [], questions: [], flashcards: [], plates: [], exam: null, notes: [] };
   const seenS = new Set();
   for (const p of packs) {
     if (!p) continue;
@@ -103,6 +116,7 @@ export function mergePacks(packs) {
     out.topics.push(...p.topics);
     out.questions.push(...p.questions);
     out.flashcards.push(...p.flashcards);
+    out.plates.push(...(p.plates || []));
     out.notes.push(...(p.notes || []));
   }
   out.topics.sort((a, b) => a.order - b.order);
@@ -115,6 +129,18 @@ export function finalize(c) {
   c.bySubject = Object.fromEntries(c.subjects.map((s) => [s.id, s]));
   c.byQuestion = Object.fromEntries(c.questions.map((q) => [q.id, q]));
   c.byCard = Object.fromEntries(c.flashcards.map((f) => [f.id, f]));
+  c.byPlate = Object.fromEntries(c.plates.map((p) => [p.id, p]));
+  c.byLabel = Object.fromEntries(c.plates.flatMap((p) => p.labels.map((l) => [l.id, l])));
+  // Questão de identificação de cada estrutura (por ilustração e nome).
+  c.spotFor = {};
+  c.questions = c.questions.filter((q) => q.type !== "spot" || (c.byPlate[q.plate] && c.byLabel[q.label]));
+  c.questions.filter((q) => q.type === "spot").forEach((q) => {
+    const l = c.byLabel[q.label];
+    q.targetName = l.name;
+    q.names = [...new Set(c.byPlate[q.plate].labels.map((x) => x.name))];
+    c.spotFor[`${q.plate}|${l.name}`] = q.id;
+  });
+  c.byQuestion = Object.fromEntries(c.questions.map((q) => [q.id, q]));
   c.chunks = c.materials.flatMap((m) => m.chunks);
   c.index = buildIndex(c.chunks);
   c.hasContent = c.materials.some((m) => !m.demo);
@@ -143,4 +169,11 @@ export const TYPE_LABEL = {
   open: "Pergunta aberta",
   match: "Associação",
   cloze: "Completar lacuna",
+  order: "Coloque em ordem",
+  spot: "Identificação na imagem",
 };
+
+export const TOPIC_COLORS = ["rose", "violet", "peach", "amber", "sky", "pink", "lilac", "mint"];
+export function topicColor(t, i = 0) {
+  return t?.color || TOPIC_COLORS[i % TOPIC_COLORS.length];
+}

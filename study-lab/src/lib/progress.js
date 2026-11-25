@@ -14,6 +14,7 @@ export function emptyProgress() {
     cards: {}, // cardId -> {box, due, rating, reviews}
     prep: {}, // topicId -> {stage, done, score, total}
     exams: [],
+    atlas: {}, // plateId -> {stars, best: {modo: pontuação}, flash}
     achievements: {},
     combo: 0,
     bestCombo: 0,
@@ -55,7 +56,9 @@ export const ACHIEVEMENTS = [
   { id: "exam", title: "Primeiro simulado", desc: "Terminar um simulado." },
   { id: "exam70", title: "Aprovado", desc: "Tirar 7 ou mais num simulado." },
   { id: "exam100", title: "Gabaritou", desc: "Acertar tudo num simulado." },
-  { id: "import", title: "Biblioteca aberta", desc: "Importar um material." },
+  { id: "atlas1", title: "Olho clínico", desc: "Fechar uma ilustração do atlas com 3 estrelas." },
+  { id: "atlasAll", title: "Atlas completo", desc: "Ganhar estrelas em todas as ilustrações." },
+  { id: "flash10", title: "Relâmpago", desc: "Acertar 10 estruturas no desafio relâmpago." },
 ];
 
 // Mensagens de incentivo, sóbrias.
@@ -196,6 +199,26 @@ export function recordPrep(prev, topicId, patch, allTopicIds) {
   if (patch.done && !before.done) {
     unlock(p, "topic", events);
     if (allTopicIds.every((id) => p.prep[id]?.done)) unlock(p, "prep", events);
+  }
+  p.updatedAt = Date.now();
+  return { p, events };
+}
+
+export function recordAtlas(prev, { plateId, mode, score, total, allPlateIds }) {
+  const p = structuredClone(prev);
+  const events = [];
+  p.atlas = p.atlas || {};
+  const a = (p.atlas[plateId] = p.atlas[plateId] || { stars: 0, best: {} });
+  if (mode === "flash") {
+    a.flash = Math.max(a.flash || 0, score);
+    if (score >= 10) unlock(p, "flash10", events);
+  } else {
+    const ratio = total ? score / total : 0;
+    const stars = ratio >= 0.9 ? 3 : ratio >= 0.7 ? 2 : ratio >= 0.4 ? 1 : 0;
+    a.best[mode] = Math.max(a.best[mode] || 0, Math.round(ratio * 100));
+    a.stars = Math.max(a.stars || 0, stars);
+    if (a.stars === 3) unlock(p, "atlas1", events);
+    if (allPlateIds.every((id) => (p.atlas[id]?.stars || 0) > 0)) unlock(p, "atlasAll", events);
   }
   p.updatedAt = Date.now();
   return { p, events };
